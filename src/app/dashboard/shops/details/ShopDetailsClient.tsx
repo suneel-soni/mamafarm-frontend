@@ -16,6 +16,8 @@ import {
   Loader2,
   Banknote,
   CreditCard,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyNumbersKeys, allowOnlyDecimalKeys, sanitizeInteger, sanitizeDecimal } from '@/utils/inputValidation';
@@ -54,8 +56,90 @@ export default function ShopDetailsClient() {
   const [transactionRef, setTransactionRef] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
 
+  // Edit Order Modal State
+  const [editOrderModalOpen, setEditOrderModalOpen] = useState(false);
+  const [editingDeliveryId, setEditingDeliveryId] = useState('');
+  const [editSproutType, setEditSproutType] = useState('Moong Sprouts');
+  const [editOrderQty, setEditOrderQty] = useState<number | string>(5);
+  const [editOrderRate, setEditOrderRate] = useState<number | string>(20);
+  const [editAmountPaid, setEditAmountPaid] = useState<number | string>(0);
+
   const { showSuccess, showError, showWarning } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const openEditOrderModal = (entry: any) => {
+    const deliveryId = entry._id || entry.id;
+    const rawDelivery = details?.deliveries?.find((d: any) => String(d._id || d.id) === String(deliveryId))
+      || details?.deliveryHistory?.find((d: any) => String(d._id || d.id) === String(deliveryId))
+      || entry;
+
+    setEditingDeliveryId(deliveryId);
+    const item = rawDelivery.items?.[0] || {};
+    setEditSproutType(item.sproutType || 'Moong Sprouts');
+    setEditOrderQty(item.quantity !== undefined ? item.quantity : 1);
+    setEditOrderRate(item.rate !== undefined ? item.rate : 20);
+    setEditAmountPaid(rawDelivery.amountPaid !== undefined ? rawDelivery.amountPaid : (entry.amountPaid || 0));
+    setEditOrderModalOpen(true);
+  };
+
+  const handleUpdateOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDeliveryId) return;
+    setIsSubmitting(true);
+    try {
+      const qty = Number(editOrderQty);
+      const rate = Number(editOrderRate);
+      const amtPaid = Number(editAmountPaid);
+      const totalAmount = qty * rate;
+
+      const payload = {
+        items: [
+          {
+            sproutType: editSproutType,
+            quantity: qty,
+            unit: 'packets',
+            rate: rate,
+            amount: totalAmount,
+          },
+        ],
+        amountPaid: amtPaid,
+        paymentStatus: amtPaid >= totalAmount ? 'paid' : amtPaid > 0 ? 'partial' : 'unpaid',
+      };
+
+      const res = await deliveriesAPI.update(editingDeliveryId, payload);
+      if (res.success) {
+        if (res.isFallback) showWarning(res.message || 'Delivery updated locally.');
+        else showSuccess('Dispatch Order Updated Successfully!');
+        setEditOrderModalOpen(false);
+        loadShopDetails();
+      } else {
+        showError(res.message || 'Failed to update delivery.');
+      }
+    } catch (err: any) {
+      showError(err.message || 'Error updating delivery.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteOrder = async (deliveryId: string) => {
+    if (!deliveryId) return;
+    if (!window.confirm('Are you sure you want to delete this dispatch order from ledger?')) return;
+    setIsSubmitting(true);
+    try {
+      const res = await deliveriesAPI.delete(deliveryId);
+      if (res.success) {
+        showSuccess('Dispatch order deleted from ledger.');
+        loadShopDetails();
+      } else {
+        showError(res.message || 'Failed to delete delivery.');
+      }
+    } catch (err: any) {
+      showError(err.message || 'Error deleting delivery.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const openOrderModal = () => {
     setSproutType('Moong Sprouts');
@@ -454,40 +538,60 @@ export default function ShopDetailsClient() {
                 return (
                   <div key={idx} className="bg-slate-800/70 border border-emerald-900/40 rounded-xl p-3 text-xs space-y-2 shadow-sm">
                     {/* Header: Reference + Date */}
-                    <div className="flex justify-between items-center border-b border-emerald-900/20 pb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-[11px] font-mono">{entry.reference}</span>
-                        <span className="text-[10px] text-slate-400">({entry.date})</span>
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-emerald-900/20 pb-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className="font-bold text-white text-[11px] font-mono truncate">{entry.reference}</span>
+                        <span className="text-[10px] text-slate-400 truncate shrink-0">({entry.date})</span>
                       </div>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                          isDelivery
-                            ? isPaid
-                              ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50'
-                              : 'bg-amber-950 text-amber-300 border border-amber-800/50'
-                            : entry.type === 'payment'
-                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/50'
-                            : 'bg-rose-950 text-rose-300 border border-rose-800/50'
-                        }`}
-                      >
-                        {isDelivery ? (isPaid ? '✓ Paid' : `Unpaid (Due ₹${unpaidDue})`) : entry.type}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase shrink-0 whitespace-nowrap ${
+                            isDelivery
+                              ? isPaid
+                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50'
+                                : 'bg-amber-950 text-amber-300 border border-amber-800/50'
+                              : entry.type === 'payment'
+                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/50'
+                              : 'bg-rose-950 text-rose-300 border border-rose-800/50'
+                          }`}
+                        >
+                          {isDelivery ? (isPaid ? '✓ Paid' : `Unpaid (Due ₹${unpaidDue})`) : entry.type}
+                        </span>
+                        {isDelivery && (
+                          <div className="flex items-center gap-1 pl-1 border-l border-slate-700/50 shrink-0">
+                            <button
+                              onClick={() => openEditOrderModal(entry)}
+                              title="Edit Dispatch Order"
+                              className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-emerald-400 transition-colors shrink-0"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOrder(entry._id || entry.id)}
+                              title="Delete Dispatch Order"
+                              className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-rose-400 transition-colors shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Order Details */}
-                    <div className="text-[11px] text-slate-200 font-medium">
+                    <div className="text-[11px] text-slate-200 font-medium break-words">
                       {entry.description}
                     </div>
 
                     {/* Unified Delivery & Payment Info in Same Card */}
                     {isDelivery && (
-                      <div className="bg-slate-900/80 border border-slate-700/40 rounded-lg p-2.5 flex items-center justify-between text-[10px] mt-1">
-                        <div className="space-y-0.5">
+                      <div className="bg-slate-900/80 border border-slate-700/40 rounded-lg p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] mt-1">
+                        <div className="space-y-0.5 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-slate-400">Total Order:</span>
                             <span className="font-bold text-white">₹{totalAmount}</span>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-slate-400">Paid:</span>
                             <span className="font-bold text-emerald-400">₹{paidAmount}</span>
                             {unpaidDue > 0 && (
@@ -503,13 +607,13 @@ export default function ShopDetailsClient() {
                         {unpaidDue > 0 ? (
                           <button
                             onClick={() => openPaymentModalForDelivery(entry)}
-                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-md shadow-amber-900/30 transition-all active:scale-95"
+                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 shadow-md shadow-amber-900/30 transition-all active:scale-95 shrink-0"
                           >
-                            <Banknote className="w-3.5 h-3.5" /> Mark as Paid (₹{unpaidDue})
+                            <Banknote className="w-3.5 h-3.5 shrink-0" /> Mark as Paid (₹{unpaidDue})
                           </button>
                         ) : (
-                          <div className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-950/60 px-2 py-1 rounded-md border border-emerald-800/40 text-[10px]">
-                            <Check className="w-3 h-3 text-emerald-400" /> Fully Settled
+                          <div className="flex items-center justify-center gap-1 text-emerald-400 font-bold bg-emerald-950/60 px-2 py-1 rounded-md border border-emerald-800/40 text-[10px] shrink-0">
+                            <Check className="w-3 h-3 text-emerald-400 shrink-0" /> Fully Settled
                           </div>
                         )}
                       </div>
@@ -799,6 +903,108 @@ export default function ShopDetailsClient() {
                   >
                     {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                     Record Return
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Edit Dispatch Order */}
+        {editOrderModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-slate-900 border-t sm:border border-emerald-900/60 rounded-t-3xl sm:rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-3">
+              <div className="flex justify-between items-center border-b border-emerald-900/40 pb-2">
+                <h3 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                  <Pencil className="w-4 h-4 text-emerald-400" /> Edit Dispatch Order
+                </h3>
+                <button onClick={() => setEditOrderModalOpen(false)} className="text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateOrder} className="space-y-3 text-xs">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">Sprout Packet Type</label>
+                  <select
+                    value={editSproutType}
+                    onChange={(e) => setEditSproutType(e.target.value)}
+                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                  >
+                    <option value="Moong Sprouts">Moong Sprouts</option>
+                    <option value="Chana Sprouts">Chana Sprouts</option>
+                    <option value="Mixed Sprouts">Mixed Sprouts</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-300 block mb-1">Quantity (Pkts)</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={editOrderQty}
+                      onKeyDown={allowOnlyNumbersKeys}
+                      onChange={(e) => {
+                        const clean = sanitizeInteger(e.target.value);
+                        setEditOrderQty(clean === '' ? ('' as any) : Number(clean));
+                      }}
+                      className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-300 block mb-1">Rate (₹/Pkt)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editOrderRate}
+                      onKeyDown={allowOnlyDecimalKeys}
+                      onChange={(e) => {
+                        const clean = sanitizeDecimal(e.target.value);
+                        setEditOrderRate(clean === '' ? ('' as any) : Number(clean));
+                      }}
+                      className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">
+                    Amount Paid / Cash Collected (₹)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={editAmountPaid}
+                    onKeyDown={allowOnlyDecimalKeys}
+                    onChange={(e) => {
+                      const clean = sanitizeDecimal(e.target.value);
+                      setEditAmountPaid(clean === '' ? ('' as any) : Number(clean));
+                    }}
+                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white font-bold"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">
+                    Total Order Value: ₹{(Number(editOrderQty) || 0) * (Number(editOrderRate) || 0)}
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/40">
+                  <button
+                    type="button"
+                    onClick={() => setEditOrderModalOpen(false)}
+                    className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-xl font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-900/40"
+                  >
+                    {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Update Order
                   </button>
                 </div>
               </form>

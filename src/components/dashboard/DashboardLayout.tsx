@@ -72,7 +72,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const currentTab = bottomTabs.find((t) => t.href === pathname) || {
-    label: 'MamaFarm Mobile Tracker',
+    label: 'MamaFarm Tracker',
   };
 
   if (isCheckingAuth) {

@@ -96,8 +96,8 @@ export default function ExpensesPage() {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Receipt className="w-7 h-7 text-emerald-400" />
+            <h1 className="text-xl font-bold text-white flex items-center gap-2">
+              <Receipt className="w-7 h-7 text-emerald-400 shrink-0" />
               Operational Expenses Tracker
             </h1>
             <p className="text-xs text-slate-400 mt-1">
