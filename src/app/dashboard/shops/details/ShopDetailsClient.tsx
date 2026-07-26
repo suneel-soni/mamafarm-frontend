@@ -335,7 +335,7 @@ export default function ShopDetailsClient() {
                   Retail Partner
                 </span>
                 <span className="px-2 py-0.5 bg-slate-800 text-emerald-300 border border-emerald-800/40 rounded-full text-[9px] font-bold font-mono">
-                  {shop?.shopCode || 'SHOP-101'}
+                  {shop?.shopCode || ''}
                 </span>
               </div>
               <h1 className="text-sm font-bold text-white truncate mt-1">{shop?.shopName}</h1>

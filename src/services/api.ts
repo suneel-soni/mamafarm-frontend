@@ -88,47 +88,40 @@ const setStorage = <T>(key: string, value: T): void => {
   }
 };
 
-// Seed initial fallback data for mobile offline mode
+// Initialize empty local storage structure and clean up legacy dummy seed data
 const initSeedData = () => {
   if (typeof window === 'undefined') return;
 
+  // Purge legacy dummy seed data (SHOP-101, SHOP-102, MAT-101, etc.) if present in browser storage
+  const cleanLocalStorage = (key: string, dummyIdsOrCodes: string[]) => {
+    const items = getStorage<any[]>(key, []);
+    if (
+      items.some(
+        (i) =>
+          dummyIdsOrCodes.includes(i.shopCode) ||
+          dummyIdsOrCodes.includes(i.materialCode) ||
+          dummyIdsOrCodes.includes(i.supplierCode) ||
+          dummyIdsOrCodes.includes(i._id)
+      )
+    ) {
+      const filtered = items.filter(
+        (i) =>
+          !dummyIdsOrCodes.includes(i.shopCode) &&
+          !dummyIdsOrCodes.includes(i.materialCode) &&
+          !dummyIdsOrCodes.includes(i.supplierCode) &&
+          !dummyIdsOrCodes.includes(i._id)
+      );
+      setStorage(key, filtered);
+    }
+  };
+
+  cleanLocalStorage('shops', ['SHOP-101', 'SHOP-102', '6a6318e02d2a89cee171ce4d', '6a6318e02d2a89cee171ce4f']);
+  cleanLocalStorage('materials', ['MAT-101', 'MAT-102']);
+  cleanLocalStorage('suppliers', ['SUP-101']);
+  cleanLocalStorage('expenses', ['EXP-101']);
+
   if (!localStorage.getItem('mamafarm_shops')) {
-    setStorage('shops', [
-      {
-        _id: '6a6318e02d2a89cee171ce4d',
-        shopCode: 'SHOP-101',
-        shopName: 'Fresh Veggies Mart',
-        ownerName: 'Suresh Patel',
-        phone: '+91 9810012345',
-        address: 'Shop 12, Sector 18 Market, Noida',
-        area: 'Noida Sector 18',
-        gstNumber: '09FRESH1234C1Z3',
-        image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
-        currentQuantity: 40,
-        outstandingBalance: 1800,
-        totalDeliveredQuantity: 50,
-        totalReturnedQuantity: 10,
-        totalDeliveredValue: 8500,
-        totalPaidAmount: 6700,
-      },
-      {
-        _id: '6a6318e02d2a89cee171ce4f',
-        shopCode: 'SHOP-102',
-        shopName: 'Green Grocery Hub',
-        ownerName: 'Vikram Singh',
-        phone: '+91 9871122334',
-        address: 'Main Market, Connaught Place, New Delhi',
-        area: 'Central Delhi',
-        gstNumber: '07GREEN5678D1Z2',
-        image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
-        currentQuantity: 60,
-        outstandingBalance: 3200,
-        totalDeliveredQuantity: 70,
-        totalReturnedQuantity: 10,
-        totalDeliveredValue: 12400,
-        totalPaidAmount: 9200,
-      },
-    ]);
+    setStorage('shops', []);
   }
 
   if (!localStorage.getItem('mamafarm_deliveries')) {
@@ -136,55 +129,15 @@ const initSeedData = () => {
   }
 
   if (!localStorage.getItem('mamafarm_materials')) {
-    setStorage('materials', [
-      {
-        _id: 'MAT-101',
-        materialCode: 'MAT-101',
-        name: 'Whole Green Moong Dal',
-        category: 'Raw Grains',
-        currentStock: 150,
-        unit: 'kg',
-        unitPrice: 90,
-        minStockAlert: 20,
-      },
-      {
-        _id: 'MAT-102',
-        materialCode: 'MAT-102',
-        name: 'Desi Chana (Bengal Gram)',
-        category: 'Raw Grains',
-        currentStock: 120,
-        unit: 'kg',
-        unitPrice: 80,
-        minStockAlert: 15,
-      },
-    ]);
+    setStorage('materials', []);
   }
 
   if (!localStorage.getItem('mamafarm_suppliers')) {
-    setStorage('suppliers', [
-      {
-        _id: 'SUP-101',
-        supplierCode: 'SUP-101',
-        supplierName: 'Agro Grain Traders',
-        contactPerson: 'Rajesh Kumar',
-        phone: '+91 9811122334',
-        address: 'Anand Grain Market, Delhi',
-        outstandingBalance: 5400,
-      },
-    ]);
+    setStorage('suppliers', []);
   }
 
   if (!localStorage.getItem('mamafarm_expenses')) {
-    setStorage('expenses', [
-      {
-        _id: 'EXP-101',
-        title: 'Packaging Pouches',
-        category: 'Packaging',
-        amount: 2500,
-        expenseDate: new Date().toISOString(),
-        notes: '1000 pouches purchased',
-      },
-    ]);
+    setStorage('expenses', []);
   }
 };
 
