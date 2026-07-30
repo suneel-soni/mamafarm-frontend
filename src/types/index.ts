@@ -87,6 +87,8 @@ export interface Delivery {
   deliveryPerson?: string;
   invoiceUrl?: string;
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ReturnOrder {
@@ -106,6 +108,8 @@ export interface ReturnOrder {
   totalRefundAmount: number;
   reason: string;
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Payment {
@@ -120,6 +124,8 @@ export interface Payment {
   paymentMethod: 'cash' | 'upi' | 'bank_transfer' | 'cheque';
   transactionRef?: string;
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SalesPerformanceData {
@@ -144,10 +150,15 @@ export interface ShopDetailsData {
   summary: {
     totalDeliveredQty: number;
     totalReturnedQty: number;
+    totalReplacedQty?: number;
     currentQuantity: number;
-    totalDeliveredValue: number;
-    totalPaidAmount: number;
+    totalDeliveredValue?: number;
+    totalDeliveredVal?: number;
+    totalPaidAmount?: number;
+    totalPaid?: number;
+    totalRefunds?: number;
     pendingPayment: number;
+    dueSyncDate?: string;
   };
   salesGraph: { date: string; amount: number; quantity?: number }[];
   recentOrders: Delivery[];
@@ -230,6 +241,8 @@ export interface Expense {
   paymentMethod?: string;
   paidTo?: string;
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface NavItem {

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyNumbersKeys, allowOnlyDecimalKeys, sanitizeInteger, sanitizeDecimal } from '@/utils/inputValidation';
+import { formatDateTimeIST, formatDateIST } from '@/utils/dateUtils';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export default function ShopDetailsClient() {
@@ -47,8 +48,8 @@ export default function ShopDetailsClient() {
   // Return / Replacement Form State
   const [recordType, setRecordType] = useState<'return' | 'replacement'>('return');
   const [returnSproutType, setReturnSproutType] = useState('Moong Sprouts');
-  const [returnQty, setReturnQty] = useState(2);
-  const [returnRate, setReturnRate] = useState(20);
+  const [returnQty, setReturnQty] = useState(1);
+  const [returnRate, setReturnRate] = useState(0);
   const [returnReason, setReturnReason] = useState('Unsold / Expired Return');
 
   // Edit Return / Replacement Modal State
@@ -56,8 +57,8 @@ export default function ShopDetailsClient() {
   const [editingReturnId, setEditingReturnId] = useState('');
   const [editRecordType, setEditRecordType] = useState<'return' | 'replacement'>('return');
   const [editReturnSproutType, setEditReturnSproutType] = useState('Moong Sprouts');
-  const [editReturnQty, setEditReturnQty] = useState<number | string>(2);
-  const [editReturnRate, setEditReturnRate] = useState<number | string>(20);
+  const [editReturnQty, setEditReturnQty] = useState<number | string>(1);
+  const [editReturnRate, setEditReturnRate] = useState<number | string>(0);
   const [editReturnReason, setEditReturnReason] = useState('Unsold / Expired Return');
 
   // Later Paid Payment State
@@ -161,28 +162,27 @@ export default function ShopDetailsClient() {
     }
   };
 
-  // --- Return / Replacement Handlers ---
-  const openReturnModal = (type: 'return' | 'replacement' = 'return') => {
-    setRecordType(type);
+  // --- Replacement Handlers ---
+  const openReturnModal = (type: 'return' | 'replacement' = 'replacement') => {
+    setRecordType('replacement');
     setReturnSproutType('Moong Sprouts');
-    setReturnQty(2);
-    setReturnRate(20);
-    setReturnReason(type === 'replacement' ? 'Expired Packet Replacement' : 'Unsold / Expired Return');
+    setReturnQty(1);
+    setReturnRate(0);
+    setReturnReason('Expired Packet Replacement');
     setReturnModalOpen(true);
   };
 
   const openEditReturnModal = (entry: any) => {
     const returnId = entry._id || entry.id;
     const rawReturn = details?.returns?.find((r: any) => String(r._id || r.id) === String(returnId)) || entry;
-    const isRep = rawReturn.type === 'replacement' || rawReturn.isReplacement || entry.type === 'replacement' || entry.returnType === 'replacement';
 
     setEditingReturnId(returnId);
-    setEditRecordType(isRep ? 'replacement' : 'return');
+    setEditRecordType('replacement');
     const item = rawReturn.items?.[0] || entry.items?.[0] || {};
     setEditReturnSproutType(item.sproutType || 'Moong Sprouts');
     setEditReturnQty(item.quantity !== undefined ? item.quantity : 1);
     setEditReturnRate(item.rate !== undefined ? item.rate : 20);
-    setEditReturnReason(rawReturn.reason || entry.reason || (isRep ? 'Expired Packet Replacement' : 'Unsold / Expired Return'));
+    setEditReturnReason(rawReturn.reason || entry.reason || 'Expired Packet Replacement');
     setEditReturnModalOpen(true);
   };
 
@@ -190,34 +190,33 @@ export default function ShopDetailsClient() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const isRep = recordType === 'replacement';
       const qty = Number(returnQty);
       const rate = Number(returnRate);
       const payload = {
         shopId,
-        type: recordType,
-        isReplacement: isRep,
-        reason: returnReason,
+        type: 'replacement',
+        isReplacement: true,
+        reason: returnReason || 'Expired Packet Replacement',
         items: [
           {
             sproutType: returnSproutType,
             quantity: qty,
             unit: 'packets',
             rate: rate,
-            amount: isRep ? 0 : qty * rate,
+            amount: 0,
           },
         ],
-        totalRefundAmount: isRep ? 0 : qty * rate,
+        totalRefundAmount: 0,
       };
 
       const res = await returnsAPI.create(payload);
       if (res.success) {
-        if (res.isFallback) showWarning(res.message || `${isRep ? 'Replacement' : 'Return'} recorded locally (Offline mode).`);
-        else showSuccess(`${isRep ? 'Packet Replacement' : 'Return'} Recorded!`);
+        if (res.isFallback) showWarning(res.message || 'Replacement recorded locally (Offline mode).');
+        else showSuccess('Packet Replacement Recorded!');
         setReturnModalOpen(false);
         loadShopDetails();
       } else {
-        showError(res.message || `Failed to record ${isRep ? 'replacement' : 'return'}.`);
+        showError(res.message || 'Failed to record replacement.');
       }
     } catch (err: any) {
       showError(err.message || 'Error recording entry.');
@@ -231,36 +230,35 @@ export default function ShopDetailsClient() {
     if (!editingReturnId) return;
     setIsSubmitting(true);
     try {
-      const isRep = editRecordType === 'replacement';
       const qty = Number(editReturnQty);
       const rate = Number(editReturnRate);
       const payload = {
-        type: editRecordType,
-        isReplacement: isRep,
-        reason: editReturnReason,
+        type: 'replacement',
+        isReplacement: true,
+        reason: editReturnReason || 'Expired Packet Replacement',
         items: [
           {
             sproutType: editReturnSproutType,
             quantity: qty,
             unit: 'packets',
             rate: rate,
-            amount: isRep ? 0 : qty * rate,
+            amount: 0,
           },
         ],
-        totalRefundAmount: isRep ? 0 : qty * rate,
+        totalRefundAmount: 0,
       };
 
       const res = await returnsAPI.update(editingReturnId, payload);
       if (res.success) {
         if (res.isFallback) showWarning(res.message || 'Record updated locally.');
-        else showSuccess(`${isRep ? 'Replacement' : 'Return'} Record Updated Successfully!`);
+        else showSuccess('Replacement Record Updated Successfully!');
         setEditReturnModalOpen(false);
         loadShopDetails();
       } else {
         showError(res.message || 'Failed to update record.');
       }
     } catch (err: any) {
-      showError(err.message || 'Error updating return record.');
+      showError(err.message || 'Error updating replacement record.');
     } finally {
       setIsSubmitting(false);
     }
@@ -461,8 +459,14 @@ export default function ShopDetailsClient() {
     totalReturnedQty: shop.totalReturnedQuantity || 0,
     totalReplacedQty: shop.totalReplacedQuantity || 0,
     currentQuantity: shop.currentQuantity || (shop.totalDeliveredQuantity || 0) - (shop.totalReturnedQuantity || 0),
+    totalDeliveredValue: shop.totalDeliveredValue || 0,
+    totalPaidAmount: shop.totalPaidAmount || 0,
     pendingPayment: shop.outstandingBalance || 0,
   };
+
+  const totalSalesVal = summary.totalDeliveredVal ?? summary.totalDeliveredValue ?? shop.totalDeliveredValue ?? 0;
+  const totalSalesPayment = summary.totalPaid ?? summary.totalPaidAmount ?? shop.totalPaidAmount ?? 0;
+  const pendingPaymentVal = summary.pendingPayment ?? shop.outstandingBalance ?? 0;
 
   const salesGraph = details?.salesGraph || [
     { date: 'Jul 15', amount: shop.totalDeliveredValue || 2400 },
@@ -471,7 +475,7 @@ export default function ShopDetailsClient() {
   ];
 
   const ledger = details?.ledger || (details?.deliveryHistory ? details.deliveryHistory.map((d: any) => ({
-    date: new Date(d.deliveryDate || d.createdAt).toLocaleDateString('en-IN'),
+    date: formatDateTimeIST(d.deliveryDate || d.createdAt),
     type: 'delivery',
     reference: d.deliveryNumber || 'DEL-2026',
     description: `Dispatched ${d.items?.map((i: any) => `${i.quantity} ${i.sproutType}`).join(', ') || 'Sprouts'}`,
@@ -537,7 +541,7 @@ export default function ShopDetailsClient() {
           </div>
 
           {/* Quick Action Mobile Buttons */}
-          <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-emerald-900/30">
+          <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-emerald-900/30">
             <button
               onClick={openOrderModal}
               className="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 shadow-md shadow-emerald-900/30"
@@ -551,12 +555,6 @@ export default function ShopDetailsClient() {
               <Banknote className="w-3 h-3" /> Pay Due
             </button>
             <button
-              onClick={() => openReturnModal('return')}
-              className="bg-slate-800 text-rose-400 border border-rose-900/40 py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1"
-            >
-              <RotateCcw className="w-3 h-3" /> Return
-            </button>
-            <button
               onClick={() => openReturnModal('replacement')}
               className="bg-slate-800 text-cyan-400 border border-cyan-900/40 py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1"
             >
@@ -565,38 +563,54 @@ export default function ShopDetailsClient() {
           </div>
         </div>
 
-        {/* 3-Column / Grid KPI Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3">
-            <p className="text-[9px] text-slate-400 uppercase font-semibold">Current Quantity</p>
-            <p className="text-base font-bold text-emerald-300 mt-0.5">{summary.currentQuantity} Packets</p>
-            <p className="text-[8px] text-emerald-400 font-bold">Delivered - Returned</p>
-          </div>
-
-          <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 flex flex-col justify-between">
+        {/* 4 KPI Summary Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {/* Total Sales */}
+          <div className="bg-slate-900/90 border border-emerald-900/50 rounded-2xl p-3 shadow-md flex flex-col justify-between">
             <div>
-              <p className="text-[9px] text-slate-400 uppercase font-semibold">Pending Payment</p>
-              <p className="text-base font-bold text-amber-400 mt-0.5">₹{(summary.pendingPayment || 0).toLocaleString('en-IN')}</p>
-              <p className="text-[8px] text-amber-300 font-bold truncate">
-                {summary.dueSyncDate ? `Due As Of: ${summary.dueSyncDate}` : 'Remaining Due'}
-              </p>
+              <p className="text-[9px] text-slate-400 uppercase font-semibold">Total Sales</p>
+              <p className="text-sm sm:text-base font-bold text-white mt-0.5">₹{totalSalesVal.toLocaleString('en-IN')}</p>
             </div>
+            {pendingPaymentVal > 0 ? (
+              <p className="text-[8px] font-bold text-amber-400 mt-1 truncate">
+                Dispatched (Due: ₹{pendingPaymentVal.toLocaleString('en-IN')})
+              </p>
+            ) : (
+              <p className="text-[8px] text-emerald-400 font-bold mt-1">Dispatched Value (Paid)</p>
+            )}
           </div>
 
-          <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-2.5">
-            <p className="text-[9px] text-slate-400 font-semibold">Total Delivered</p>
-            <p className="text-xs font-bold text-emerald-400 mt-0.5">{summary.totalDeliveredQty} Packets</p>
+          {/* Pending Payment */}
+          <div className="bg-slate-900/90 border border-amber-900/50 rounded-2xl p-3 shadow-md flex flex-col justify-between">
+            <div>
+              <p className="text-[9px] text-amber-300 uppercase font-semibold">Pending Payment</p>
+              <p className="text-sm sm:text-base font-bold text-amber-400 mt-0.5">₹{pendingPaymentVal.toLocaleString('en-IN')}</p>
+            </div>
+            {pendingPaymentVal > 0 ? (
+              <p className="text-[8px] text-amber-300/90 font-bold truncate mt-1">
+                Due: ₹{pendingPaymentVal.toLocaleString('en-IN')} {summary.dueSyncDate ? `(${summary.dueSyncDate})` : ''}
+              </p>
+            ) : (
+              <p className="text-[8px] text-emerald-400 font-bold mt-1">✓ Fully Settled (No Due)</p>
+            )}
           </div>
 
-          <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-2.5">
-            <p className="text-[9px] text-slate-400 font-semibold">Total Returned</p>
-            <p className="text-xs font-bold text-rose-400 mt-0.5">{summary.totalReturnedQty} Packets</p>
+          {/* Total Delivered */}
+          <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md flex flex-col justify-between">
+            <div>
+              <p className="text-[9px] text-slate-400 uppercase font-semibold">Total Delivered</p>
+              <p className="text-sm sm:text-base font-bold text-emerald-400 mt-0.5">{summary.totalDeliveredQty} Packets</p>
+            </div>
+            <p className="text-[8px] text-slate-500 font-medium mt-1">Total Packets Sent</p>
           </div>
 
-          <div className="bg-slate-900/90 border border-cyan-900/40 rounded-2xl p-2.5 col-span-2 sm:col-span-1">
-            <p className="text-[9px] text-slate-400 font-semibold">Total Replaced</p>
-            <p className="text-xs font-bold text-cyan-400 mt-0.5">{summary.totalReplacedQty || 0} Packets</p>
-            <p className="text-[8px] text-cyan-500 font-medium">Expired Swaps (1-to-1)</p>
+          {/* Total Replaced */}
+          <div className="bg-slate-900/90 border border-cyan-900/50 rounded-2xl p-3 shadow-md flex flex-col justify-between">
+            <div>
+              <p className="text-[9px] text-cyan-400 uppercase font-semibold">Total Replaced</p>
+              <p className="text-sm sm:text-base font-bold text-cyan-300 mt-0.5">{summary.totalReplacedQty || 0} Packets</p>
+            </div>
+            <p className="text-[8px] text-cyan-500 font-medium mt-1">1-to-1 Swaps</p>
           </div>
         </div>
 
@@ -976,48 +990,16 @@ export default function ShopDetailsClient() {
           </div>
         )}
 
-        {/* Modal: Record Return or Replacement */}
+        {/* Modal: Record Packet Replacement */}
         {returnModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end justify-center p-0">
             <div className="bg-slate-900 border-t border-emerald-900/60 rounded-t-3xl w-full max-w-md p-5 shadow-2xl space-y-3">
               <div className="flex justify-between items-center border-b border-emerald-900/40 pb-2">
-                <h3 className={`text-xs font-bold ${recordType === 'replacement' ? 'text-cyan-400' : 'text-rose-400'}`}>
-                  {recordType === 'replacement' ? 'Record Packet Replacement' : 'Record Order Return'}
+                <h3 className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                  <RefreshCw className="w-4 h-4" /> Record Packet Replacement
                 </h3>
-                <button onClick={() => setReturnModalOpen(false)} className="text-slate-400">
+                <button onClick={() => setReturnModalOpen(false)} className="text-slate-400 hover:text-white">
                   <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Mode Selector Tabs */}
-              <div className="grid grid-cols-2 gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50 text-[11px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRecordType('return');
-                    setReturnReason('Unsold / Expired Return');
-                  }}
-                  className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
-                    recordType === 'return'
-                      ? 'bg-rose-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <RotateCcw className="w-3 h-3" /> Return (Credit)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRecordType('replacement');
-                    setReturnReason('Expired Packet Replacement');
-                  }}
-                  className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
-                    recordType === 'replacement'
-                      ? 'bg-cyan-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <RefreshCw className="w-3 h-3" /> Replacement (1-to-1)
                 </button>
               </div>
 
@@ -1038,7 +1020,7 @@ export default function ShopDetailsClient() {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] font-semibold text-slate-300 block mb-1">
-                      {recordType === 'replacement' ? 'Replaced Packets' : 'Returned Packets'}
+                      Replaced Packets
                     </label>
                     <input
                       type="text"
@@ -1053,37 +1035,20 @@ export default function ShopDetailsClient() {
                     />
                   </div>
 
-                  {recordType === 'return' ? (
-                    <div>
-                      <label className="text-[10px] font-semibold text-slate-300 block mb-1">Credit Rate (₹/Pkt)</label>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={returnRate}
-                        onKeyDown={allowOnlyDecimalKeys}
-                        onChange={(e) => {
-                          const clean = sanitizeDecimal(e.target.value);
-                          setReturnRate(clean === '' ? ('' as any) : Number(clean));
-                        }}
-                        className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="text-[10px] font-semibold text-slate-300 block mb-1">Unit Rate Ref (₹/Pkt)</label>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={returnRate}
-                        onKeyDown={allowOnlyDecimalKeys}
-                        onChange={(e) => {
-                          const clean = sanitizeDecimal(e.target.value);
-                          setReturnRate(clean === '' ? ('' as any) : Number(clean));
-                        }}
-                        className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-300 block mb-1">Unit Rate Ref (₹/Pkt)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={returnRate}
+                      onKeyDown={allowOnlyDecimalKeys}
+                      onChange={(e) => {
+                        const clean = sanitizeDecimal(e.target.value);
+                        setReturnRate(clean === '' ? ('' as any) : Number(clean));
+                      }}
+                      className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1094,11 +1059,9 @@ export default function ShopDetailsClient() {
                     onChange={(e) => setReturnReason(e.target.value)}
                     className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                   />
-                  {recordType === 'replacement' && (
-                    <p className="text-[9px] text-cyan-400 mt-1">
-                      * Replacements swap expired packets with fresh packets (1-for-1). Outstanding balance remains unchanged.
-                    </p>
-                  )}
+                  <p className="text-[9px] text-cyan-400 mt-1">
+                    * Replacements swap expired packets with fresh packets (1-for-1). Outstanding balance remains unchanged.
+                  </p>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/40">
@@ -1112,12 +1075,10 @@ export default function ShopDetailsClient() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className={`px-4 py-1.5 text-white rounded-xl font-bold flex items-center gap-1 ${
-                      recordType === 'replacement' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-rose-600 hover:bg-rose-500'
-                    }`}
+                    className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold flex items-center gap-1"
                   >
                     {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                    {recordType === 'replacement' ? 'Record Replacement' : 'Record Return'}
+                    Record Replacement
                   </button>
                 </div>
               </form>
@@ -1125,43 +1086,17 @@ export default function ShopDetailsClient() {
           </div>
         )}
 
-        {/* Modal: Edit Return or Replacement */}
+        {/* Modal: Edit Packet Replacement */}
         {editReturnModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="bg-slate-900 border-t sm:border border-emerald-900/60 rounded-t-3xl sm:rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-3">
               <div className="flex justify-between items-center border-b border-emerald-900/40 pb-2">
-                <h3 className={`text-xs font-bold flex items-center gap-1.5 ${editRecordType === 'replacement' ? 'text-cyan-400' : 'text-rose-400'}`}>
+                <h3 className="text-xs font-bold flex items-center gap-1.5 text-cyan-400">
                   <Pencil className="w-4 h-4" />
-                  {editRecordType === 'replacement' ? 'Edit Packet Replacement' : 'Edit Order Return'}
+                  Edit Packet Replacement
                 </h3>
                 <button onClick={() => setEditReturnModalOpen(false)} className="text-slate-400 hover:text-white">
                   <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Mode Selector Tabs */}
-              <div className="grid grid-cols-2 gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50 text-[11px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setEditRecordType('return')}
-                  className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
-                    editRecordType === 'return'
-                      ? 'bg-rose-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <RotateCcw className="w-3 h-3" /> Return (Credit)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditRecordType('replacement')}
-                  className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
-                    editRecordType === 'replacement'
-                      ? 'bg-cyan-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <RefreshCw className="w-3 h-3" /> Replacement (1-to-1)
                 </button>
               </div>
 
@@ -1182,7 +1117,7 @@ export default function ShopDetailsClient() {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] font-semibold text-slate-300 block mb-1">
-                      {editRecordType === 'replacement' ? 'Replaced Packets' : 'Returned Packets'}
+                      Replaced Packets
                     </label>
                     <input
                       type="text"
@@ -1222,16 +1157,9 @@ export default function ShopDetailsClient() {
                     onChange={(e) => setEditReturnReason(e.target.value)}
                     className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                   />
-                  {editRecordType === 'return' && (
-                    <p className="text-[9px] text-rose-400 mt-1">
-                      Total Refund Credit: ₹{(Number(editReturnQty) || 0) * (Number(editReturnRate) || 0)}
-                    </p>
-                  )}
-                  {editRecordType === 'replacement' && (
-                    <p className="text-[9px] text-cyan-400 mt-1">
-                      1-to-1 Packet Exchange: No impact on outstanding payment balance.
-                    </p>
-                  )}
+                  <p className="text-[9px] text-cyan-400 mt-1">
+                    1-to-1 Packet Exchange: No impact on outstanding payment balance.
+                  </p>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/40">
@@ -1245,12 +1173,10 @@ export default function ShopDetailsClient() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className={`px-4 py-1.5 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg ${
-                      editRecordType === 'replacement' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-rose-600 hover:bg-rose-500'
-                    }`}
+                    className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold flex items-center gap-1"
                   >
-                    {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Update Record
+                    {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    Update Replacement Record
                   </button>
                 </div>
               </form>

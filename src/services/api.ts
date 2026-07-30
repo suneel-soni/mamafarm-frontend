@@ -347,6 +347,53 @@ export const suppliersAPI = {
   },
 };
 
+function recalculateShopLocalStorage(shopId: string) {
+  const shops = getStorage<any[]>('shops', []);
+  const shopIndex = shops.findIndex((s) => s._id === shopId || s.shopCode === shopId);
+  if (shopIndex === -1) return;
+
+  const deliveries = getStorage<any[]>('deliveries', []).filter((d) => d.shopId === shopId || d.shop === shopId);
+  const payments = getStorage<any[]>('payments', []).filter((p) => p.shopId === shopId || p.shop === shopId);
+  const returns = getStorage<any[]>('returns', []).filter((r) => r.shopId === shopId || r.shop === shopId);
+
+  let totalDeliveredQty = 0;
+  let grossDeliveredValue = 0;
+  deliveries.forEach((d) => {
+    grossDeliveredValue += Number(d.netAmount || 0);
+    d.items?.forEach((i: any) => { totalDeliveredQty += Number(i.quantity || 0); });
+  });
+
+  let totalReturnedQty = 0;
+  let totalReplacedQty = 0;
+  let totalRefunds = 0;
+  returns.forEach((r) => {
+    const isRep = r.type === 'replacement' || r.isReplacement;
+    if (isRep) {
+      r.items?.forEach((i: any) => { totalReplacedQty += Number(i.quantity || 0); });
+    } else {
+      totalRefunds += Number(r.totalRefundAmount || 0);
+      r.items?.forEach((i: any) => { totalReturnedQty += Number(i.quantity || 0); });
+    }
+  });
+
+  const grossPaid = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const netSalesVal = Math.max(0, grossDeliveredValue - totalRefunds);
+  const netSalesPayment = Math.min(grossPaid, netSalesVal);
+  const outstandingBalance = Math.max(0, netSalesVal - grossPaid);
+
+  shops[shopIndex] = {
+    ...shops[shopIndex],
+    totalDeliveredQuantity: totalDeliveredQty,
+    totalReturnedQuantity: totalReturnedQty,
+    totalReplacedQuantity: totalReplacedQty,
+    currentQuantity: Math.max(0, totalDeliveredQty - totalReturnedQty),
+    totalDeliveredValue: netSalesVal,
+    totalPaidAmount: netSalesPayment,
+    outstandingBalance: outstandingBalance,
+  };
+  setStorage('shops', shops);
+}
+
 export const shopsAPI = {
   getAll: async (): Promise<ApiResponse> => {
     try {
@@ -390,7 +437,7 @@ export const shopsAPI = {
           ],
           deliveryHistory: shopDeliveries,
           ledger: shopDeliveries.map((d) => ({
-            date: new Date(d.deliveryDate || Date.now()).toLocaleDateString('en-IN'),
+            date: new Date(d.deliveryDate || Date.now()).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }),
             type: 'delivery',
             reference: d.deliveryNumber || 'DEL-2026',
             description: `Dispatched ${d.items?.map((i: any) => `${i.quantity} ${i.sproutType}`).join(', ') || 'Sprouts'}`,
@@ -575,16 +622,7 @@ export const returnsAPI = {
       const qty = data.items?.reduce((acc: number, i: any) => acc + Number(i.quantity || 0), 0) || 0;
       const isRep = data.type === 'replacement' || data.isReplacement === true;
 
-      if (shop) {
-        if (isRep) {
-          shop.totalReplacedQuantity = (shop.totalReplacedQuantity || 0) + qty;
-        } else {
-          shop.totalReturnedQuantity = (shop.totalReturnedQuantity || 0) + qty;
-          shop.currentQuantity = Math.max(0, (shop.totalDeliveredQuantity || 0) - shop.totalReturnedQuantity);
-        }
-        setStorage('shops', shops);
-      }
-
+      const refundAmt = isRep ? 0 : Number(data.totalRefundAmount || 0);
       const prefix = isRep ? 'REP' : 'RET';
       const newReturn = {
         _id: `${prefix}-${101 + returns.length}`,
@@ -592,11 +630,13 @@ export const returnsAPI = {
         ...data,
         type: isRep ? 'replacement' : 'return',
         isReplacement: isRep,
-        totalRefundAmount: isRep ? 0 : (data.totalRefundAmount || 0),
+        totalRefundAmount: refundAmt,
         createdAt: new Date().toISOString(),
       };
 
       setStorage('returns', [newReturn, ...returns]);
+      if (shop?._id) recalculateShopLocalStorage(shop._id);
+
       return {
         success: true,
         isFallback: true,
@@ -619,6 +659,9 @@ export const returnsAPI = {
       if (index !== -1) {
         returns[index] = { ...returns[index], ...data };
         setStorage('returns', returns);
+        if (returns[index]?.shopId || returns[index]?.shop) {
+          recalculateShopLocalStorage(returns[index].shopId || returns[index].shop);
+        }
       }
       return { success: true, isFallback: true, message: 'Server offline. Record updated locally.' };
     }
@@ -633,8 +676,12 @@ export const returnsAPI = {
         return { success: false, message: errInfo.message, statusCode: errInfo.statusCode };
       }
       const returns = getStorage<any[]>('returns', []);
+      const itemToDelete = returns.find((r) => r._id === id || r.returnNumber === id);
       const updated = returns.filter((r) => r._id !== id && r.returnNumber !== id);
       setStorage('returns', updated);
+      if (itemToDelete?.shopId || itemToDelete?.shop) {
+        recalculateShopLocalStorage(itemToDelete.shopId || itemToDelete.shop);
+      }
       return { success: true, isFallback: true, message: 'Server offline. Record deleted locally.' };
     }
   },

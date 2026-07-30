@@ -7,6 +7,7 @@ import { ProductionBatch, Material } from '@/types';
 import { Factory, Plus, Check, X, Flame, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyNumbersKeys, allowOnlyDecimalKeys } from '@/utils/inputValidation';
+import { formatDateIST } from '@/utils/dateUtils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -166,7 +167,7 @@ export default function ProductionPage() {
                         </span>
                       </td>
                       <td className="p-4 text-slate-400">
-                        {new Date(b.completionDate || Date.now()).toLocaleDateString('en-IN')}
+                        {formatDateIST(b.completionDate || b.createdAt)}
                       </td>
                     </tr>
                   ))

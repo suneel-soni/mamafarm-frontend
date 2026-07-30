@@ -6,6 +6,7 @@ import { paymentsAPI, shopsAPI, suppliersAPI } from '@/services/api';
 import { Payment, Shop, Supplier } from '@/types';
 import { CreditCard, Plus, Check, X, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { allowOnlyDecimalKeys, sanitizeDecimal } from '@/utils/inputValidation';
+import { formatDateIST } from '@/utils/dateUtils';
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -162,7 +163,7 @@ export default function PaymentsPage() {
                         <td className="p-4 uppercase text-slate-300">{p.paymentMethod}</td>
                         <td className="p-4 font-mono text-[11px] text-slate-400">{p.transactionRef || 'N/A'}</td>
                         <td className="p-4 text-slate-400">
-                          {new Date(p.paymentDate || Date.now()).toLocaleDateString('en-IN')}
+                          {formatDateIST(p.paymentDate || p.createdAt)}
                         </td>
                       </tr>
                     );

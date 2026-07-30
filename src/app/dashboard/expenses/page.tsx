@@ -7,6 +7,7 @@ import { Expense } from '@/types';
 import { Receipt, Plus, Check, X, IndianRupee, PieChart, Loader2 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyDecimalKeys } from '@/utils/inputValidation';
+import { formatDateIST } from '@/utils/dateUtils';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -158,7 +159,7 @@ export default function ExpensesPage() {
                       <td className="p-4 font-bold text-rose-300 text-sm">₹{exp.amount}</td>
                       <td className="p-4 uppercase text-slate-300">{exp.paymentMethod}</td>
                       <td className="p-4 text-slate-400">
-                        {new Date(exp.expenseDate || Date.now()).toLocaleDateString('en-IN')}
+                        {formatDateIST(exp.expenseDate || exp.createdAt)}
                       </td>
                     </tr>
                   ))

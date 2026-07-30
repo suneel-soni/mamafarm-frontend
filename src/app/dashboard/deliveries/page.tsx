@@ -7,6 +7,7 @@ import { Delivery, Shop } from '@/types';
 import { Truck, Plus, FileText, Check, X, Printer, IndianRupee, Store, Loader2, Trash2 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyNumbersKeys, allowOnlyDecimalKeys, sanitizeInteger, sanitizeDecimal } from '@/utils/inputValidation';
+import { formatDateIST } from '@/utils/dateUtils';
 
 export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
@@ -185,7 +186,7 @@ export default function DeliveriesPage() {
                         <span>{del.shopName}</span>
                       </td>
                       <td className="p-4 text-slate-400">
-                        {new Date(del.deliveryDate || Date.now()).toLocaleDateString('en-IN')}
+                        {formatDateIST(del.deliveryDate || del.createdAt)}
                       </td>
                       <td className="p-4 font-bold text-white">₹{del.netAmount}</td>
                       <td className="p-4 text-slate-300">₹{del.amountPaid || 0}</td>
@@ -445,7 +446,7 @@ export default function DeliveriesPage() {
                 <div>
                   <p className="font-bold text-white mb-1">Delivery Details:</p>
                   <p>
-                    Date: {new Date(invoiceModalDelivery.deliveryDate || Date.now()).toLocaleDateString('en-IN')}
+                    Date: {formatDateIST(invoiceModalDelivery.deliveryDate || invoiceModalDelivery.createdAt)}
                   </p>
                   <p>Driver: {invoiceModalDelivery.deliveryPerson || 'Self'}</p>
                 </div>
