@@ -29,7 +29,20 @@ export default function InventoryPage() {
     setLoading(true);
     try {
       const res = await inventoryAPI.getAll();
-      if (res.success) setInventory(res.data || []);
+      if (res.success) {
+        const raw = res.data;
+        const list = Array.isArray(raw) ? raw : raw?.items || [];
+        const normalized: InventoryItem[] = list.map((item: any) => ({
+          _id: item._id || item.id || `INV-${Math.random().toString(36).substring(2, 7)}`,
+          itemName: item.itemName || item.name || 'Stock Item',
+          type: item.type || item.category || 'raw_material',
+          quantity: Number(item.quantity) || 0,
+          unit: item.unit || 'kg',
+          minThreshold: Number(item.minThreshold ?? item.minAlert ?? 10),
+          valuationPerUnit: Number(item.valuationPerUnit ?? item.pricePerUnit ?? 0),
+        }));
+        setInventory(normalized);
+      }
     } catch (err: any) {
       showError(err.message || 'Failed to load inventory.');
     } finally {
@@ -49,7 +62,7 @@ export default function InventoryPage() {
     try {
       const res = await inventoryAPI.create({
         itemName,
-        type,
+        type: type as any,
         quantity: Number(quantity),
         unit,
         minThreshold: Number(minThreshold),
@@ -88,13 +101,20 @@ export default function InventoryPage() {
     }
   };
 
-  const totalValuation = inventory.reduce((sum, item) => sum + item.quantity * (item.valuationPerUnit || 0), 0);
-  const lowStockCount = inventory.filter((item) => item.quantity <= item.minThreshold).length;
+  const safeInventory = Array.isArray(inventory) ? inventory : [];
 
-  const filtered = inventory.filter(
+  const totalValuation = safeInventory.reduce(
+    (sum, item) => sum + (Number(item?.quantity) || 0) * (Number(item?.valuationPerUnit) || 0),
+    0
+  );
+  const lowStockCount = safeInventory.filter(
+    (item) => (Number(item?.quantity) || 0) <= (Number(item?.minThreshold) || 10)
+  ).length;
+
+  const filtered = safeInventory.filter(
     (item) =>
-      item.itemName?.toLowerCase().includes(search.toLowerCase()) ||
-      item.type?.toLowerCase().includes(search.toLowerCase())
+      (item?.itemName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (item?.type || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -129,7 +149,7 @@ export default function InventoryPage() {
 
           <div className="bg-slate-900/80 border border-emerald-900/40 rounded-2xl p-5 shadow-lg">
             <p className="text-xs text-slate-400 font-medium mb-1">Total Stock SKUs</p>
-            <p className="text-2xl font-bold text-white">{inventory.length} Items</p>
+            <p className="text-2xl font-bold text-white">{safeInventory.length} Items</p>
             <p className="text-xs text-emerald-400 mt-1 font-medium">Raw, Finished & Packaging</p>
           </div>
 
@@ -185,8 +205,8 @@ export default function InventoryPage() {
                   </tr>
                 ) : (
                   filtered.map((item) => {
-                    const isLow = item.quantity <= item.minThreshold;
-                    const stockVal = item.quantity * (item.valuationPerUnit || 0);
+                    const isLow = (Number(item?.quantity) || 0) <= (Number(item?.minThreshold) || 10);
+                    const stockVal = (Number(item?.quantity) || 0) * (Number(item?.valuationPerUnit) || 0);
                     return (
                       <tr key={item._id} className="hover:bg-emerald-900/10 transition-colors">
                         <td className="p-4 font-bold text-white">{item.itemName}</td>
