@@ -134,6 +134,10 @@ export interface SalesPerformanceData {
   monthlySales: number;
   totalRevenue: number;
   pendingCollection: number;
+  totalDeliveredPackets?: number;
+  totalDeliveredAmount?: number;
+  totalReplacedPackets?: number;
+  totalReplacedAmount?: number;
   topPerformingShops: {
     _id: string;
     shopName: string;

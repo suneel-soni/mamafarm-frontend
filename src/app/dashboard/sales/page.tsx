@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { dashboardAPI } from '@/services/api';
 import { SalesPerformanceData } from '@/types';
-import { TrendingUp, ArrowUpRight, Award, BarChart3, ChevronRight } from 'lucide-react';
+import { TrendingUp, ArrowUpRight, Award, BarChart3, ChevronRight, PackageCheck, RefreshCw } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import {
   ResponsiveContainer,
@@ -58,6 +58,10 @@ export default function SalesPerformancePage() {
   const pendingCollection = salesData.pendingCollection ?? 0;
   const weeklySales = salesData.weeklySales ?? 0;
   const monthlySales = salesData.monthlySales ?? 0;
+  const totalDeliveredPackets = salesData.totalDeliveredPackets ?? 0;
+  const totalDeliveredAmount = salesData.totalDeliveredAmount ?? 0;
+  const totalReplacedPackets = salesData.totalReplacedPackets ?? 0;
+  const totalReplacedAmount = salesData.totalReplacedAmount ?? 0;
   const topShops = salesData.topPerformingShops || [];
 
   return (
@@ -77,8 +81,8 @@ export default function SalesPerformancePage() {
           </div>
         </div>
 
-        {/* 2-Column Touch Metric Grid */}
-        <div className="grid grid-cols-2 gap-2.5">
+        {/* 2 & 3 Column Touch Metric Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md">
             <p className="text-[10px] text-slate-400 font-semibold">Today's Sales</p>
             <p className="text-lg font-extrabold text-emerald-400 mt-0.5">
@@ -111,6 +115,32 @@ export default function SalesPerformancePage() {
               ₹{monthlySales.toLocaleString('en-IN')}
             </p>
             <p className="text-[9px] text-slate-500">This Month</p>
+          </div>
+
+          <div className="bg-slate-900/90 border border-blue-900/40 rounded-2xl p-3 shadow-md">
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+              Total Delivered
+              <PackageCheck className="w-3.5 h-3.5 text-blue-400" />
+            </p>
+            <p className="text-base font-extrabold text-blue-400 mt-0.5">
+              {totalDeliveredPackets.toLocaleString('en-IN')} <span className="text-xs font-semibold text-blue-300/80">Pkts</span>
+            </p>
+            <p className="text-[9px] text-blue-300/80 mt-0.5 font-semibold truncate">
+              Value: ₹{totalDeliveredAmount.toLocaleString('en-IN')}
+            </p>
+          </div>
+
+          <div className="bg-slate-900/90 border border-purple-900/40 rounded-2xl p-3 shadow-md">
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+              Total Replaced
+              <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+            </p>
+            <p className="text-base font-extrabold text-purple-400 mt-0.5">
+              {totalReplacedPackets.toLocaleString('en-IN')} <span className="text-xs font-semibold text-purple-300/80">Pkts</span>
+            </p>
+            <p className="text-[9px] text-purple-300/80 mt-0.5 font-semibold truncate">
+              Value: ₹{totalReplacedAmount.toLocaleString('en-IN')}
+            </p>
           </div>
         </div>
 

@@ -214,7 +214,24 @@ export const dashboardAPI = {
       const errInfo = extractApiError(error);
       const shops = getStorage<any[]>('shops', []);
       const deliveries = getStorage<any[]>('deliveries', []);
+      const returns = getStorage<any[]>('returns', []);
       const totalRev = deliveries.reduce((acc, d) => acc + (d.netAmount || 0), 0);
+      const totalDeliveredPackets = deliveries.reduce((acc, d) => {
+        return acc + (d.items?.reduce((iSum: number, item: any) => iSum + Number(item.quantity || 0), 0) || 0);
+      }, 0);
+      let totalReplacedPackets = 0;
+      let totalReplacedAmount = 0;
+      returns.forEach((r) => {
+        if (r.type === 'replacement' || r.isReplacement) {
+          r.items?.forEach((i: any) => {
+            const q = Number(i.quantity || 0);
+            const rRate = Number(i.rate || 0);
+            const amt = Number(i.amount || q * rRate);
+            totalReplacedPackets += q;
+            totalReplacedAmount += amt;
+          });
+        }
+      });
       return {
         success: true,
         isFallback: true,
@@ -225,6 +242,10 @@ export const dashboardAPI = {
           monthlySales: totalRev,
           totalRevenue: totalRev,
           pendingCollection: 0,
+          totalDeliveredPackets,
+          totalDeliveredAmount: totalRev,
+          totalReplacedPackets,
+          totalReplacedAmount,
           topPerformingShops: shops.slice(0, 3),
           dailyGraph: [],
           monthlyGraph: [],
