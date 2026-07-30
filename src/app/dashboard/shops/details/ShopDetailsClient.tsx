@@ -511,7 +511,7 @@ export default function ShopDetailsClient() {
               <img
                 src={
                   shop?.image ||
-                  'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600'
+                  '/images/shop-placeholder.jpg'
                 }
                 alt={shop?.shopName || 'Shop'}
                 className="w-full h-full object-cover"

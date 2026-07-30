@@ -191,7 +191,7 @@ export default function SalesPerformancePage() {
                 >
                   <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-700 shrink-0">
                     <img
-                      src={shop.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600'}
+                      src={shop.image || '/images/shop-placeholder.jpg'}
                       alt={shop.shopName || 'Shop'}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
