@@ -573,21 +573,69 @@ export const returnsAPI = {
       const shops = getStorage<any[]>('shops', []);
       const shop = shops.find((s) => s._id === data.shopId || s.shopCode === data.shopId);
       const qty = data.items?.reduce((acc: number, i: any) => acc + Number(i.quantity || 0), 0) || 0;
+      const isRep = data.type === 'replacement' || data.isReplacement === true;
 
       if (shop) {
-        shop.totalReturnedQuantity = (shop.totalReturnedQuantity || 0) + qty;
-        shop.currentQuantity = Math.max(0, (shop.totalDeliveredQuantity || 0) - shop.totalReturnedQuantity);
+        if (isRep) {
+          shop.totalReplacedQuantity = (shop.totalReplacedQuantity || 0) + qty;
+        } else {
+          shop.totalReturnedQuantity = (shop.totalReturnedQuantity || 0) + qty;
+          shop.currentQuantity = Math.max(0, (shop.totalDeliveredQuantity || 0) - shop.totalReturnedQuantity);
+        }
         setStorage('shops', shops);
       }
 
+      const prefix = isRep ? 'REP' : 'RET';
       const newReturn = {
-        _id: `RET-${101 + returns.length}`,
+        _id: `${prefix}-${101 + returns.length}`,
+        returnNumber: `${prefix}-2026-0${returns.length + 1}`,
         ...data,
+        type: isRep ? 'replacement' : 'return',
+        isReplacement: isRep,
+        totalRefundAmount: isRep ? 0 : (data.totalRefundAmount || 0),
         createdAt: new Date().toISOString(),
       };
 
       setStorage('returns', [newReturn, ...returns]);
-      return { success: true, isFallback: true, message: 'Server offline. Return recorded locally.', data: newReturn };
+      return {
+        success: true,
+        isFallback: true,
+        message: `Server offline. ${isRep ? 'Replacement' : 'Return'} recorded locally.`,
+        data: newReturn,
+      };
+    }
+  },
+  update: async (id: string, data: any): Promise<ApiResponse> => {
+    try {
+      const res = await api.put(`/returns/${id}`, data);
+      return res.data;
+    } catch (error: any) {
+      const errInfo = extractApiError(error);
+      if (!errInfo.isNetworkError) {
+        return { success: false, message: errInfo.message, statusCode: errInfo.statusCode };
+      }
+      const returns = getStorage<any[]>('returns', []);
+      const index = returns.findIndex((r) => r._id === id || r.returnNumber === id);
+      if (index !== -1) {
+        returns[index] = { ...returns[index], ...data };
+        setStorage('returns', returns);
+      }
+      return { success: true, isFallback: true, message: 'Server offline. Record updated locally.' };
+    }
+  },
+  delete: async (id: string): Promise<ApiResponse> => {
+    try {
+      const res = await api.delete(`/returns/${id}`);
+      return res.data;
+    } catch (error: any) {
+      const errInfo = extractApiError(error);
+      if (!errInfo.isNetworkError) {
+        return { success: false, message: errInfo.message, statusCode: errInfo.statusCode };
+      }
+      const returns = getStorage<any[]>('returns', []);
+      const updated = returns.filter((r) => r._id !== id && r.returnNumber !== id);
+      setStorage('returns', updated);
+      return { success: true, isFallback: true, message: 'Server offline. Record deleted locally.' };
     }
   },
   getAll: async (shopId?: string): Promise<ApiResponse> => {
@@ -601,7 +649,7 @@ export const returnsAPI = {
         success: true,
         isFallback: true,
         message: errInfo.message,
-        data: shopId ? returns.filter((r) => r.shopId === shopId) : returns,
+        data: shopId ? returns.filter((r) => r.shopId === shopId || r.shop === shopId) : returns,
       };
     }
   },

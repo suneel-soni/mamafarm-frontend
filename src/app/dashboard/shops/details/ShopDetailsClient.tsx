@@ -10,12 +10,12 @@ import {
   ArrowLeft,
   Plus,
   RotateCcw,
+  RefreshCw,
   FileText,
   X,
   Check,
   Loader2,
   Banknote,
-  CreditCard,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -38,16 +38,27 @@ export default function ShopDetailsClient() {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Form State
+  // Order Form State
   const [sproutType, setSproutType] = useState('Moong Sprouts');
   const [orderQty, setOrderQty] = useState(5);
   const [orderRate, setOrderQtyRate] = useState(20);
   const [amountPaid, setAmountPaid] = useState(0);
 
+  // Return / Replacement Form State
+  const [recordType, setRecordType] = useState<'return' | 'replacement'>('return');
   const [returnSproutType, setReturnSproutType] = useState('Moong Sprouts');
   const [returnQty, setReturnQty] = useState(2);
   const [returnRate, setReturnRate] = useState(20);
   const [returnReason, setReturnReason] = useState('Unsold / Expired Return');
+
+  // Edit Return / Replacement Modal State
+  const [editReturnModalOpen, setEditReturnModalOpen] = useState(false);
+  const [editingReturnId, setEditingReturnId] = useState('');
+  const [editRecordType, setEditRecordType] = useState<'return' | 'replacement'>('return');
+  const [editReturnSproutType, setEditReturnSproutType] = useState('Moong Sprouts');
+  const [editReturnQty, setEditReturnQty] = useState<number | string>(2);
+  const [editReturnRate, setEditReturnRate] = useState<number | string>(20);
+  const [editReturnReason, setEditReturnReason] = useState('Unsold / Expired Return');
 
   // Later Paid Payment State
   const [selectedDeliveryForPayment, setSelectedDeliveryForPayment] = useState<any | null>(null);
@@ -66,6 +77,15 @@ export default function ShopDetailsClient() {
 
   const { showSuccess, showError, showWarning } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // --- Order Handlers ---
+  const openOrderModal = () => {
+    setSproutType('Moong Sprouts');
+    setOrderQty(5);
+    setOrderQtyRate(20);
+    setAmountPaid(0);
+    setOrderModalOpen(true);
+  };
 
   const openEditOrderModal = (entry: any) => {
     const deliveryId = entry._id || entry.id;
@@ -141,14 +161,131 @@ export default function ShopDetailsClient() {
     }
   };
 
-  const openOrderModal = () => {
-    setSproutType('Moong Sprouts');
-    setOrderQty(5);
-    setOrderQtyRate(20);
-    setAmountPaid(0);
-    setOrderModalOpen(true);
+  // --- Return / Replacement Handlers ---
+  const openReturnModal = (type: 'return' | 'replacement' = 'return') => {
+    setRecordType(type);
+    setReturnSproutType('Moong Sprouts');
+    setReturnQty(2);
+    setReturnRate(20);
+    setReturnReason(type === 'replacement' ? 'Expired Packet Replacement' : 'Unsold / Expired Return');
+    setReturnModalOpen(true);
   };
 
+  const openEditReturnModal = (entry: any) => {
+    const returnId = entry._id || entry.id;
+    const rawReturn = details?.returns?.find((r: any) => String(r._id || r.id) === String(returnId)) || entry;
+    const isRep = rawReturn.type === 'replacement' || rawReturn.isReplacement || entry.type === 'replacement' || entry.returnType === 'replacement';
+
+    setEditingReturnId(returnId);
+    setEditRecordType(isRep ? 'replacement' : 'return');
+    const item = rawReturn.items?.[0] || entry.items?.[0] || {};
+    setEditReturnSproutType(item.sproutType || 'Moong Sprouts');
+    setEditReturnQty(item.quantity !== undefined ? item.quantity : 1);
+    setEditReturnRate(item.rate !== undefined ? item.rate : 20);
+    setEditReturnReason(rawReturn.reason || entry.reason || (isRep ? 'Expired Packet Replacement' : 'Unsold / Expired Return'));
+    setEditReturnModalOpen(true);
+  };
+
+  const handleReturnOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const isRep = recordType === 'replacement';
+      const qty = Number(returnQty);
+      const rate = Number(returnRate);
+      const payload = {
+        shopId,
+        type: recordType,
+        isReplacement: isRep,
+        reason: returnReason,
+        items: [
+          {
+            sproutType: returnSproutType,
+            quantity: qty,
+            unit: 'packets',
+            rate: rate,
+            amount: isRep ? 0 : qty * rate,
+          },
+        ],
+        totalRefundAmount: isRep ? 0 : qty * rate,
+      };
+
+      const res = await returnsAPI.create(payload);
+      if (res.success) {
+        if (res.isFallback) showWarning(res.message || `${isRep ? 'Replacement' : 'Return'} recorded locally (Offline mode).`);
+        else showSuccess(`${isRep ? 'Packet Replacement' : 'Return'} Recorded!`);
+        setReturnModalOpen(false);
+        loadShopDetails();
+      } else {
+        showError(res.message || `Failed to record ${isRep ? 'replacement' : 'return'}.`);
+      }
+    } catch (err: any) {
+      showError(err.message || 'Error recording entry.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateReturn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReturnId) return;
+    setIsSubmitting(true);
+    try {
+      const isRep = editRecordType === 'replacement';
+      const qty = Number(editReturnQty);
+      const rate = Number(editReturnRate);
+      const payload = {
+        type: editRecordType,
+        isReplacement: isRep,
+        reason: editReturnReason,
+        items: [
+          {
+            sproutType: editReturnSproutType,
+            quantity: qty,
+            unit: 'packets',
+            rate: rate,
+            amount: isRep ? 0 : qty * rate,
+          },
+        ],
+        totalRefundAmount: isRep ? 0 : qty * rate,
+      };
+
+      const res = await returnsAPI.update(editingReturnId, payload);
+      if (res.success) {
+        if (res.isFallback) showWarning(res.message || 'Record updated locally.');
+        else showSuccess(`${isRep ? 'Replacement' : 'Return'} Record Updated Successfully!`);
+        setEditReturnModalOpen(false);
+        loadShopDetails();
+      } else {
+        showError(res.message || 'Failed to update record.');
+      }
+    } catch (err: any) {
+      showError(err.message || 'Error updating return record.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteReturn = async (returnId: string) => {
+    if (!returnId) return;
+    if (!window.confirm('Are you sure you want to delete this return/replacement record from ledger?')) return;
+    setIsSubmitting(true);
+    try {
+      const res = await returnsAPI.delete(returnId);
+      if (res.success) {
+        showSuccess('Record deleted from ledger.');
+        loadShopDetails();
+      } else {
+        showError(res.message || 'Failed to delete record.');
+      }
+    } catch (err: any) {
+      showError(err.message || 'Error deleting record.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- Payment Handlers ---
   const openPaymentModal = (defaultAmt?: number, note?: string) => {
     setSelectedDeliveryForPayment(null);
     const due = defaultAmt !== undefined ? defaultAmt : (summary?.pendingPayment || 0);
@@ -292,40 +429,6 @@ export default function ShopDetailsClient() {
     }
   };
 
-  const handleReturnOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const payload = {
-        shopId,
-        reason: returnReason,
-        items: [
-          {
-            sproutType: returnSproutType,
-            quantity: Number(returnQty),
-            unit: 'packets',
-            rate: Number(returnRate),
-            amount: Number(returnQty) * Number(returnRate),
-          },
-        ],
-      };
-
-      const res = await returnsAPI.create(payload);
-      if (res.success) {
-        if (res.isFallback) showWarning(res.message || 'Return recorded locally (Offline mode).');
-        else showSuccess('Return Recorded!');
-        setReturnModalOpen(false);
-        loadShopDetails();
-      } else {
-        showError(res.message || 'Failed to record return.');
-      }
-    } catch (err: any) {
-      showError(err.message || 'Error recording return.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   if (loading) {
     return (
       <DashboardLayout>
@@ -356,6 +459,7 @@ export default function ShopDetailsClient() {
   const summary = details?.summary || {
     totalDeliveredQty: shop.totalDeliveredQuantity || 0,
     totalReturnedQty: shop.totalReturnedQuantity || 0,
+    totalReplacedQty: shop.totalReplacedQuantity || 0,
     currentQuantity: shop.currentQuantity || (shop.totalDeliveredQuantity || 0) - (shop.totalReturnedQuantity || 0),
     pendingPayment: shop.outstandingBalance || 0,
   };
@@ -433,30 +537,36 @@ export default function ShopDetailsClient() {
           </div>
 
           {/* Quick Action Mobile Buttons */}
-          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-emerald-900/30">
+          <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-emerald-900/30">
             <button
               onClick={openOrderModal}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 shadow-md shadow-emerald-900/30"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 shadow-md shadow-emerald-900/30"
             >
-              <Plus className="w-3.5 h-3.5" /> Dispatch
+              <Plus className="w-3 h-3" /> Dispatch
             </button>
             <button
               onClick={() => openPaymentModal(summary.pendingPayment, 'Later Paid Settlement')}
-              className="bg-amber-600 hover:bg-amber-500 text-white py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 shadow-md shadow-amber-900/30"
+              className="bg-amber-600 hover:bg-amber-500 text-white py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 shadow-md shadow-amber-900/30"
             >
-              <Banknote className="w-3.5 h-3.5" /> Pay Due
+              <Banknote className="w-3 h-3" /> Pay Due
             </button>
             <button
-              onClick={() => setReturnModalOpen(true)}
-              className="bg-slate-800 text-rose-400 border border-rose-900/40 py-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1"
+              onClick={() => openReturnModal('return')}
+              className="bg-slate-800 text-rose-400 border border-rose-900/40 py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> Return
+              <RotateCcw className="w-3 h-3" /> Return
+            </button>
+            <button
+              onClick={() => openReturnModal('replacement')}
+              className="bg-slate-800 text-cyan-400 border border-cyan-900/40 py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Replace
             </button>
           </div>
         </div>
 
-        {/* 2-Column KPI Summary Cards */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* 3-Column / Grid KPI Summary Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3">
             <p className="text-[9px] text-slate-400 uppercase font-semibold">Current Quantity</p>
             <p className="text-base font-bold text-emerald-300 mt-0.5">{summary.currentQuantity} Packets</p>
@@ -467,8 +577,6 @@ export default function ShopDetailsClient() {
             <div>
               <p className="text-[9px] text-slate-400 uppercase font-semibold">Pending Payment</p>
               <p className="text-base font-bold text-amber-400 mt-0.5">₹{(summary.pendingPayment || 0).toLocaleString('en-IN')}</p>
-            </div>
-            <div className="flex items-center justify-between mt-1 pt-1 border-t border-amber-900/30">
               <p className="text-[8px] text-amber-300 font-bold truncate">
                 {summary.dueSyncDate ? `Due As Of: ${summary.dueSyncDate}` : 'Remaining Due'}
               </p>
@@ -483,6 +591,12 @@ export default function ShopDetailsClient() {
           <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-2.5">
             <p className="text-[9px] text-slate-400 font-semibold">Total Returned</p>
             <p className="text-xs font-bold text-rose-400 mt-0.5">{summary.totalReturnedQty} Packets</p>
+          </div>
+
+          <div className="bg-slate-900/90 border border-cyan-900/40 rounded-2xl p-2.5 col-span-2 sm:col-span-1">
+            <p className="text-[9px] text-slate-400 font-semibold">Total Replaced</p>
+            <p className="text-xs font-bold text-cyan-400 mt-0.5">{summary.totalReplacedQty || 0} Packets</p>
+            <p className="text-[8px] text-cyan-500 font-medium">Expired Swaps (1-to-1)</p>
           </div>
         </div>
 
@@ -530,6 +644,10 @@ export default function ShopDetailsClient() {
             ) : (
               ledger.map((entry: any, idx: number) => {
                 const isDelivery = entry.type === 'delivery';
+                const isReturn = entry.type === 'return';
+                const isReplacement = entry.type === 'replacement' || entry.returnType === 'replacement';
+                const isPayment = entry.type === 'payment';
+
                 const totalAmount = entry.netAmount || entry.debit || 0;
                 const paidAmount = entry.amountPaid || 0;
                 const unpaidDue = isDelivery ? Math.max(0, totalAmount - paidAmount) : 0;
@@ -540,8 +658,8 @@ export default function ShopDetailsClient() {
                     {/* Header: Reference + Date */}
                     <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-emerald-900/20 pb-1.5">
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        <span className="font-bold text-white text-[11px] font-mono truncate">{entry.reference}</span>
-                        <span className="text-[10px] text-slate-400 truncate shrink-0">({entry.date})</span>
+                        <span className="font-bold text-white text-[11px] font-mono truncate shrink-0">{entry.reference}</span>
+                        <span className="text-[10px] text-slate-400 truncate">({entry.date})</span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                         <span
@@ -550,13 +668,25 @@ export default function ShopDetailsClient() {
                               ? isPaid
                                 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50'
                                 : 'bg-amber-950 text-amber-300 border border-amber-800/50'
-                              : entry.type === 'payment'
+                              : isPayment
                               ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/50'
+                              : isReplacement
+                              ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/50'
                               : 'bg-rose-950 text-rose-300 border border-rose-800/50'
                           }`}
                         >
-                          {isDelivery ? (isPaid ? '✓ Paid' : `Unpaid (Due ₹${unpaidDue})`) : entry.type}
+                          {isDelivery
+                            ? isPaid
+                              ? '✓ Paid'
+                              : `Unpaid (Due ₹${unpaidDue})`
+                            : isReplacement
+                            ? '⇄ Replacement'
+                            : isReturn
+                            ? '↩ Return'
+                            : entry.type}
                         </span>
+
+                        {/* Action buttons for Delivery */}
                         {isDelivery && (
                           <div className="flex items-center gap-1 pl-1 border-l border-slate-700/50 shrink-0">
                             <button
@@ -569,6 +699,26 @@ export default function ShopDetailsClient() {
                             <button
                               onClick={() => handleDeleteOrder(entry._id || entry.id)}
                               title="Delete Dispatch Order"
+                              className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-rose-400 transition-colors shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Action buttons for Return & Replacement */}
+                        {(isReturn || isReplacement) && (
+                          <div className="flex items-center gap-1 pl-1 border-l border-slate-700/50 shrink-0">
+                            <button
+                              onClick={() => openEditReturnModal(entry)}
+                              title={isReplacement ? 'Edit Replacement Record' : 'Edit Return Record'}
+                              className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-cyan-400 transition-colors shrink-0"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteReturn(entry._id || entry.id)}
+                              title={isReplacement ? 'Delete Replacement Record' : 'Delete Return Record'}
                               className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-rose-400 transition-colors shrink-0"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -619,11 +769,15 @@ export default function ShopDetailsClient() {
                       </div>
                     )}
 
-                    {/* Non-delivery (Standalone payment or return) */}
+                    {/* Non-delivery (Standalone payment, return, or replacement) */}
                     {!isDelivery && (
                       <div className="flex justify-between items-center text-[10px] pt-1 border-t border-emerald-900/20">
-                        <span className="text-slate-400">Amount Settled</span>
-                        <span className="font-bold text-emerald-300">₹{entry.credit}</span>
+                        <span className="text-slate-400">
+                          {isReplacement ? 'Financial Impact' : 'Amount Settled'}
+                        </span>
+                        <span className={`font-bold ${isReplacement ? 'text-cyan-300' : 'text-emerald-300'}`}>
+                          {isReplacement ? '₹0 (1-to-1 Packet Exchange)' : `₹${entry.credit}`}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -822,14 +976,48 @@ export default function ShopDetailsClient() {
           </div>
         )}
 
-        {/* Modal: Return Order */}
+        {/* Modal: Record Return or Replacement */}
         {returnModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end justify-center p-0">
             <div className="bg-slate-900 border-t border-emerald-900/60 rounded-t-3xl w-full max-w-md p-5 shadow-2xl space-y-3">
               <div className="flex justify-between items-center border-b border-emerald-900/40 pb-2">
-                <h3 className="text-xs font-bold text-rose-400">Record Order Return</h3>
+                <h3 className={`text-xs font-bold ${recordType === 'replacement' ? 'text-cyan-400' : 'text-rose-400'}`}>
+                  {recordType === 'replacement' ? 'Record Packet Replacement' : 'Record Order Return'}
+                </h3>
                 <button onClick={() => setReturnModalOpen(false)} className="text-slate-400">
                   <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Mode Selector Tabs */}
+              <div className="grid grid-cols-2 gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecordType('return');
+                    setReturnReason('Unsold / Expired Return');
+                  }}
+                  className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                    recordType === 'return'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <RotateCcw className="w-3 h-3" /> Return (Credit)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecordType('replacement');
+                    setReturnReason('Expired Packet Replacement');
+                  }}
+                  className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                    recordType === 'replacement'
+                      ? 'bg-cyan-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <RefreshCw className="w-3 h-3" /> Replacement (1-to-1)
                 </button>
               </div>
 
@@ -849,7 +1037,9 @@ export default function ShopDetailsClient() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] font-semibold text-slate-300 block mb-1">Returned Packets</label>
+                    <label className="text-[10px] font-semibold text-slate-300 block mb-1">
+                      {recordType === 'replacement' ? 'Replaced Packets' : 'Returned Packets'}
+                    </label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -862,30 +1052,53 @@ export default function ShopDetailsClient() {
                       className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-300 block mb-1">Credit Rate (₹/Pkt)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={returnRate}
-                      onKeyDown={allowOnlyDecimalKeys}
-                      onChange={(e) => {
-                        const clean = sanitizeDecimal(e.target.value);
-                        setReturnRate(clean === '' ? ('' as any) : Number(clean));
-                      }}
-                      className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
-                    />
-                  </div>
+
+                  {recordType === 'return' ? (
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-300 block mb-1">Credit Rate (₹/Pkt)</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={returnRate}
+                        onKeyDown={allowOnlyDecimalKeys}
+                        onChange={(e) => {
+                          const clean = sanitizeDecimal(e.target.value);
+                          setReturnRate(clean === '' ? ('' as any) : Number(clean));
+                        }}
+                        className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-300 block mb-1">Unit Rate Ref (₹/Pkt)</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={returnRate}
+                        onKeyDown={allowOnlyDecimalKeys}
+                        onChange={(e) => {
+                          const clean = sanitizeDecimal(e.target.value);
+                          setReturnRate(clean === '' ? ('' as any) : Number(clean));
+                        }}
+                        className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">Reason</label>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">Reason / Notes</label>
                   <input
                     type="text"
                     value={returnReason}
                     onChange={(e) => setReturnReason(e.target.value)}
                     className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                   />
+                  {recordType === 'replacement' && (
+                    <p className="text-[9px] text-cyan-400 mt-1">
+                      * Replacements swap expired packets with fresh packets (1-for-1). Outstanding balance remains unchanged.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/40">
@@ -899,10 +1112,145 @@ export default function ShopDetailsClient() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-4 py-1.5 bg-rose-600 text-white rounded-xl font-bold flex items-center gap-1"
+                    className={`px-4 py-1.5 text-white rounded-xl font-bold flex items-center gap-1 ${
+                      recordType === 'replacement' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-rose-600 hover:bg-rose-500'
+                    }`}
                   >
                     {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                    Record Return
+                    {recordType === 'replacement' ? 'Record Replacement' : 'Record Return'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Edit Return or Replacement */}
+        {editReturnModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-slate-900 border-t sm:border border-emerald-900/60 rounded-t-3xl sm:rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-3">
+              <div className="flex justify-between items-center border-b border-emerald-900/40 pb-2">
+                <h3 className={`text-xs font-bold flex items-center gap-1.5 ${editRecordType === 'replacement' ? 'text-cyan-400' : 'text-rose-400'}`}>
+                  <Pencil className="w-4 h-4" />
+                  {editRecordType === 'replacement' ? 'Edit Packet Replacement' : 'Edit Order Return'}
+                </h3>
+                <button onClick={() => setEditReturnModalOpen(false)} className="text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Mode Selector Tabs */}
+              <div className="grid grid-cols-2 gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setEditRecordType('return')}
+                  className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                    editRecordType === 'return'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <RotateCcw className="w-3 h-3" /> Return (Credit)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditRecordType('replacement')}
+                  className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                    editRecordType === 'replacement'
+                      ? 'bg-cyan-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <RefreshCw className="w-3 h-3" /> Replacement (1-to-1)
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateReturn} className="space-y-3 text-xs">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">Sprout Packet Type</label>
+                  <select
+                    value={editReturnSproutType}
+                    onChange={(e) => setEditReturnSproutType(e.target.value)}
+                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                  >
+                    <option value="Moong Sprouts">Moong Sprouts</option>
+                    <option value="Chana Sprouts">Chana Sprouts</option>
+                    <option value="Mixed Sprouts">Mixed Sprouts</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-300 block mb-1">
+                      {editRecordType === 'replacement' ? 'Replaced Packets' : 'Returned Packets'}
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={editReturnQty}
+                      onKeyDown={allowOnlyNumbersKeys}
+                      onChange={(e) => {
+                        const clean = sanitizeInteger(e.target.value);
+                        setEditReturnQty(clean === '' ? ('' as any) : Number(clean));
+                      }}
+                      className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-300 block mb-1">Rate (₹/Pkt)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editReturnRate}
+                      onKeyDown={allowOnlyDecimalKeys}
+                      onChange={(e) => {
+                        const clean = sanitizeDecimal(e.target.value);
+                        setEditReturnRate(clean === '' ? ('' as any) : Number(clean));
+                      }}
+                      className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">Reason / Notes</label>
+                  <input
+                    type="text"
+                    value={editReturnReason}
+                    onChange={(e) => setEditReturnReason(e.target.value)}
+                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                  />
+                  {editRecordType === 'return' && (
+                    <p className="text-[9px] text-rose-400 mt-1">
+                      Total Refund Credit: ₹{(Number(editReturnQty) || 0) * (Number(editReturnRate) || 0)}
+                    </p>
+                  )}
+                  {editRecordType === 'replacement' && (
+                    <p className="text-[9px] text-cyan-400 mt-1">
+                      1-to-1 Packet Exchange: No impact on outstanding payment balance.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/40">
+                  <button
+                    type="button"
+                    onClick={() => setEditReturnModalOpen(false)}
+                    className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-xl font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className={`px-4 py-1.5 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg ${
+                      editRecordType === 'replacement' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-rose-600 hover:bg-rose-500'
+                    }`}
+                  >
+                    {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Update Record
                   </button>
                 </div>
               </form>

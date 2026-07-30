@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { dashboardAPI } from '@/services/api';
 import { SalesPerformanceData } from '@/types';
-import { TrendingUp, ArrowUpRight, Award, BarChart3 } from 'lucide-react';
+import { TrendingUp, ArrowUpRight, Award, BarChart3, ChevronRight } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import {
   ResponsiveContainer,
@@ -19,6 +20,7 @@ import {
 } from 'recharts';
 
 export default function SalesPerformancePage() {
+  const router = useRouter();
   const [salesData, setSalesData] = useState<SalesPerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -165,35 +167,49 @@ export default function SalesPerformancePage() {
 
         {/* Top Performing Shops List */}
         <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3.5 shadow-md space-y-2.5">
-          <div className="flex items-center gap-1.5">
-            <Award className="w-4 h-4 text-emerald-400" />
-            <h3 className="font-bold text-white text-xs">Top Partner Shops</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-emerald-400" />
+              <h3 className="font-bold text-white text-xs">Top Partner Shops</h3>
+            </div>
+            <span className="text-[9px] text-slate-400 font-medium">Click to view shop details</span>
           </div>
 
           <div className="space-y-2">
             {topShops.map((shop, idx) => {
               const shopSales = shop.totalSales ?? shop.deliveredQty ?? 0;
+              const targetId = shop._id;
               return (
                 <div
-                  key={shop._id || idx}
-                  className="bg-slate-800/60 border border-emerald-900/40 rounded-xl p-2.5 flex items-center gap-2.5"
+                  key={targetId || idx}
+                  onClick={() => {
+                    if (targetId) {
+                      router.push(`/dashboard/shops/details?id=${targetId}`);
+                    }
+                  }}
+                  className="bg-slate-800/60 hover:bg-slate-800 border border-emerald-900/40 hover:border-emerald-600/60 rounded-xl p-2.5 flex items-center gap-2.5 cursor-pointer transition-all active:scale-[0.99] group"
                 >
                   <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-700 shrink-0">
                     <img
                       src={shop.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600'}
                       alt={shop.shopName || 'Shop'}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-white text-xs truncate">{shop.shopName || 'Shop'}</p>
+                    <p className="font-bold text-white text-xs truncate group-hover:text-emerald-400 transition-colors">
+                      {shop.shopName || 'Shop'}
+                    </p>
                     <p className="text-[10px] text-emerald-400 font-bold">
                       ₹{shopSales.toLocaleString('en-IN')}
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-md">
-                    #{idx + 1}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-md">
+                      #{idx + 1}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all" />
+                  </div>
                 </div>
               );
             })}
@@ -203,3 +219,4 @@ export default function SalesPerformancePage() {
     </DashboardLayout>
   );
 }
+

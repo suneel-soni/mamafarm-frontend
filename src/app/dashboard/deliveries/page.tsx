@@ -213,7 +213,7 @@ export default function DeliveriesPage() {
                         <button
                           onClick={() => handleDeleteDelivery(del._id)}
                           title="Delete Delivery Dispatch"
-                          className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-900/50 rounded-lg border border-rose-900/30 transition-colors"
+                          className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-900/50 rounded-lg border border-rose-900/30 transition-colors hidden"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
