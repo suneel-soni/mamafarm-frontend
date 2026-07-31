@@ -5,3 +5,8 @@ out
 .env.production
 .DS_Store
 *.log
+public/sw.js
+public/workbox-*.js
+sw.js
+workbox-*.js
+

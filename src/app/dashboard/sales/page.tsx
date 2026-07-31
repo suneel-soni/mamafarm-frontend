@@ -120,7 +120,7 @@ export default function SalesPerformancePage() {
           <div className="bg-slate-900/90 border border-blue-900/40 rounded-2xl p-3 shadow-md">
             <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
               Total Delivered
-              <PackageCheck className="w-3.5 h-3.5 text-blue-400" />
+              {/* <PackageCheck className="w-3.5 h-3.5 text-blue-400" /> */}
             </p>
             <p className="text-base font-extrabold text-blue-400 mt-0.5">
               {totalDeliveredPackets.toLocaleString('en-IN')} <span className="text-xs font-semibold text-blue-300/80">Pkts</span>
@@ -133,7 +133,7 @@ export default function SalesPerformancePage() {
           <div className="bg-slate-900/90 border border-purple-900/40 rounded-2xl p-3 shadow-md">
             <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
               Total Replaced
-              <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+              {/* <RefreshCw className="w-3.5 h-3.5 text-purple-400" /> */}
             </p>
             <p className="text-base font-extrabold text-purple-400 mt-0.5">
               {totalReplacedPackets.toLocaleString('en-IN')} <span className="text-xs font-semibold text-purple-300/80">Pkts</span>
