@@ -155,8 +155,8 @@ export default function DeliveriesPage() {
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-800/80 text-emerald-400 uppercase font-semibold text-[11px] border-b border-emerald-900/40">
                 <tr>
-                  <th className="p-4">Delivery #</th>
-                  <th className="p-4">Shop / Client</th>
+                  <th className="p-4">Delivery</th>
+                  <th className="p-4">Shop</th>
                   <th className="p-4">Delivery Date</th>
                   <th className="p-4">Net Amount</th>
                   <th className="p-4">Paid</th>

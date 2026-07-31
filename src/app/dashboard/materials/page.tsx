@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { materialsAPI, suppliersAPI } from '@/services/api';
 import { MaterialGroupedSummary, Supplier } from '@/types';
-import { Wheat, Plus, Calendar, Filter, X, Check, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { Wheat, Plus, Calendar, Filter, X, Check, Edit2, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyNumbersKeys, allowOnlyDecimalKeys } from '@/utils/inputValidation';
 import { useForm } from 'react-hook-form';
@@ -34,6 +34,13 @@ export default function MaterialSummaryPage() {
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
   
+  // Collapsible state for date-wise grouped purchase lists (only one group expanded at a time, index 0 default)
+  const [expandedGroupIndex, setExpandedGroupIndex] = useState<number | null>(0);
+
+  const toggleGroup = (idx: number) => {
+    setExpandedGroupIndex((prev) => (prev === idx ? null : idx));
+  };
+
   // Modal & Edit State
   const [modalOpen, setModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<any | null>(null);
@@ -63,6 +70,7 @@ export default function MaterialSummaryPage() {
       const res = await materialsAPI.getSummary({ filter, startDate, endDate });
       if (res.success) {
         setSummaryData(res.data);
+        setExpandedGroupIndex(0);
         if (res.isFallback) showWarning('Server offline. Displaying cached materials.');
       } else {
         showError(res.message || 'Failed to load material summary.');
@@ -242,58 +250,87 @@ export default function MaterialSummaryPage() {
           ) : !summaryData || !summaryData.groupedSummary || summaryData.groupedSummary.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs">No material purchases in this period.</div>
           ) : (
-            summaryData.groupedSummary.map((group: any, idx: number) => (
-              <div key={idx} className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3.5 shadow-md space-y-2">
-                <div className="flex justify-between items-center border-b border-emerald-900/30 pb-2">
-                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" /> {group.date}
-                  </span>
-                  <span className="text-xs font-extrabold text-amber-300">
-                    ₹{group.totalCost.toLocaleString('en-IN')}
-                  </span>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  {group.materials.map((mat: any) => (
-                    <div key={mat._id} className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2.5 text-xs space-y-1.5">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <p className="font-bold text-white text-xs">{mat.name}</p>
-                            <button
-                              onClick={() => openEditModal(mat)}
-                              className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-700/80 rounded-lg transition-all"
-                              title="Edit Material Purchase"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteMaterial(mat._id, mat.name)}
-                              className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-700/80 rounded-lg transition-all"
-                              title="Delete Material Purchase"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                          <p className="text-[10px] text-slate-400">
-                            Supplier: {typeof mat.supplier === 'object' ? mat.supplier?.name : 'Local Trade'}
-                          </p>
-                        </div>
-                        <span className="px-2 py-0.5 bg-slate-900 text-emerald-300 rounded-md font-bold text-[10px]">
-                          {mat.quantity} {mat.unit}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1.5 border-t border-emerald-900/20">
-                        <span>Rate: ₹{mat.purchasePrice}/{mat.unit}</span>
-                        <span className="font-bold text-emerald-400">
-                          Total: ₹{Math.round(mat.quantity * mat.purchasePrice).toLocaleString('en-IN')}
-                        </span>
-                      </div>
+            summaryData.groupedSummary.map((group: any, idx: number) => {
+              const isExpanded = expandedGroupIndex === idx;
+              return (
+                <div key={idx} className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3.5 shadow-md space-y-2">
+                  <div
+                    onClick={() => toggleGroup(idx)}
+                    className={`flex justify-between items-center cursor-pointer select-none transition-all ${
+                      isExpanded ? 'border-b border-emerald-900/30 pb-2' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5" /> {group.date}
+                      </span>
+                      <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium">
+                        {group.materials?.length || 0} {group.materials?.length === 1 ? 'item' : 'items'}
+                      </span>
                     </div>
-                  ))}
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-extrabold text-amber-300">
+                        ₹{group.totalCost.toLocaleString('en-IN')}
+                      </span>
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="space-y-2 pt-1">
+                      {group.materials.map((mat: any) => (
+                        <div key={mat._id} className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2.5 text-xs space-y-1.5">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-bold text-white text-xs">{mat.name}</p>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditModal(mat);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-700/80 rounded-lg transition-all"
+                                  title="Edit Material Purchase"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteMaterial(mat._id, mat.name);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-700/80 rounded-lg transition-all"
+                                  title="Delete Material Purchase"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <p className="text-[10px] text-slate-400">
+                                Supplier: {typeof mat.supplier === 'object' ? mat.supplier?.name : 'Local Trade'}
+                              </p>
+                            </div>
+                            <span className="px-2 py-0.5 bg-slate-900 text-emerald-300 rounded-md font-bold text-[10px]">
+                              {mat.quantity} {mat.unit}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1.5 border-t border-emerald-900/20">
+                            <span>Rate: ₹{mat.purchasePrice}/{mat.unit}</span>
+                            <span className="font-bold text-emerald-400">
+                              Total: ₹{Math.round(mat.quantity * mat.purchasePrice).toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

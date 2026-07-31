@@ -541,7 +541,7 @@ export default function ShopDetailsClient() {
           </div>
 
           {/* Quick Action Mobile Buttons */}
-          <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-emerald-900/30">
+          <div className="grid grid-cols-3 gap-1.5 pt-2.5 border-t border-emerald-900/30">
             <button
               onClick={openOrderModal}
               className="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 shadow-md shadow-emerald-900/30"
@@ -583,7 +583,7 @@ export default function ShopDetailsClient() {
           {/* Pending Payment */}
           <div className="bg-slate-900/90 border border-amber-900/50 rounded-2xl p-3 shadow-md flex flex-col justify-between">
             <div>
-              <p className="text-[9px] text-amber-300 uppercase font-semibold">Pending Payment</p>
+              <p className="text-[9px] text-amber-300 uppercase font-semibold">Total Due</p>
               <p className="text-sm sm:text-base font-bold text-amber-400 mt-0.5">₹{pendingPaymentVal.toLocaleString('en-IN')}</p>
             </div>
             {pendingPaymentVal > 0 ? (
@@ -694,7 +694,7 @@ export default function ShopDetailsClient() {
                               ? '✓ Paid'
                               : `Unpaid (Due ₹${unpaidDue})`
                             : isReplacement
-                            ? '⇄ Replacement'
+                            ? '⇄ Replaced'
                             : isReturn
                             ? '↩ Return'
                             : entry.type}

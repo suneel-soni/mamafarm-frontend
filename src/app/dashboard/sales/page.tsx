@@ -94,7 +94,7 @@ export default function SalesPerformancePage() {
           </div>
 
           <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md">
-            <p className="text-[10px] text-slate-400 font-semibold">Pending Collection</p>
+            <p className="text-[10px] text-slate-400 font-semibold">Total Due</p>
             <p className="text-lg font-extrabold text-amber-400 mt-0.5">
               ₹{pendingCollection.toLocaleString('en-IN')}
             </p>

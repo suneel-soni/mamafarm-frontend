@@ -27,7 +27,7 @@ export default function ShopCardsPage() {
   const [shops, setShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'dues' | 'qty' | 'name'>('dues');
+  const [sortBy, setSortBy] = useState<'dues' | 'qty' | 'sales' | 'name'>('dues');
   
   // Modal & Edit state
   const [modalOpen, setModalOpen] = useState(false);
@@ -186,6 +186,7 @@ export default function ShopCardsPage() {
     .sort((a, b) => {
       if (sortBy === 'name') return a.shopName.localeCompare(b.shopName);
       if (sortBy === 'dues') return b.outstandingBalance - a.outstandingBalance;
+      if (sortBy === 'sales') return (b.totalDeliveredValue || 0) - (a.totalDeliveredValue || 0);
       if (sortBy === 'qty') return b.currentQuantity - a.currentQuantity;
       return 0;
     });
@@ -244,6 +245,7 @@ export default function ShopCardsPage() {
               className="bg-transparent text-emerald-400 font-bold text-[11px] focus:outline-none"
             >
               <option value="dues">Highest Dues</option>
+              <option value="sales">Highest Total Sales</option>
               <option value="qty">Highest Delivered Qty</option>
               <option value="name">Shop Name</option>
             </select>
@@ -304,18 +306,25 @@ export default function ShopCardsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2.5">
-                    <p className="text-[9px] text-slate-400 uppercase font-semibold">Delivered Qty</p>
-                    <p className="text-xs font-bold text-emerald-400 mt-0.5">
-                      {shop.currentQuantity || Math.max(0, (shop.totalDeliveredQuantity || 0) - (shop.totalReturnedQuantity || 0))} Packets
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2 sm:p-2.5">
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase font-semibold truncate">Total Sales</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-emerald-400 mt-0.5 truncate">
+                      ₹{(shop.totalDeliveredValue || 0).toLocaleString('en-IN')}
                     </p>
                   </div>
 
-                  <div className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2.5">
-                    <p className="text-[9px] text-slate-400 uppercase font-semibold">Remaining Payment</p>
+                  <div className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2 sm:p-2.5">
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase font-semibold truncate">Total Qty</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-emerald-300 mt-0.5 truncate">
+                      {shop.currentQuantity || Math.max(0, (shop.totalDeliveredQuantity || 0) - (shop.totalReturnedQuantity || 0))} Pkts
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2 sm:p-2.5">
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase font-semibold truncate">Total Due</p>
                     <p
-                      className={`text-xs font-bold mt-0.5 ${
+                      className={`text-[11px] sm:text-xs font-bold mt-0.5 truncate ${
                         shop.outstandingBalance > 0 ? 'text-amber-400' : 'text-emerald-400'
                       }`}
                     >
