@@ -133,6 +133,8 @@ export interface SalesPerformanceData {
   weeklySales: number;
   monthlySales: number;
   totalRevenue: number;
+  totalSalesAllTime?: number;
+  totalCollectionAllTime?: number;
   pendingCollection: number;
   totalDeliveredPackets?: number;
   totalDeliveredAmount?: number;

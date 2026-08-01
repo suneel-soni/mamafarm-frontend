@@ -29,7 +29,7 @@ type MaterialFormData = z.infer<typeof materialSchema>;
 export default function MaterialSummaryPage() {
   const [summaryData, setSummaryData] = useState<any>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [filter, setFilter] = useState<'today' | 'yesterday' | 'this_week' | 'this_month' | 'custom'>('this_month');
+  const [filter, setFilter] = useState<'today' | 'yesterday' | 'this_week' | 'this_month' | 'all_time' | 'custom'>('this_month');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
@@ -213,6 +213,7 @@ export default function MaterialSummaryPage() {
             { id: 'yesterday', label: 'Yesterday' },
             { id: 'this_week', label: 'This Week' },
             { id: 'this_month', label: 'This Month' },
+            { id: 'all_time', label: 'All Time' },
           ].map((f) => (
             <button
               key={f.id}

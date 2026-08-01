@@ -22,7 +22,7 @@ import {
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyNumbersKeys, allowOnlyDecimalKeys, sanitizeInteger, sanitizeDecimal } from '@/utils/inputValidation';
 import { formatDateTimeIST, formatDateIST } from '@/utils/dateUtils';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, LabelList } from 'recharts';
 
 export default function ShopDetailsClient() {
   const params = useParams();
@@ -617,9 +617,9 @@ export default function ShopDetailsClient() {
         {/* Historical Chart */}
         <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3.5 shadow-md space-y-2">
           <h3 className="font-bold text-white text-xs">Dispatch Sales History</h3>
-          <div className="h-40 w-full">
+          <div className="h-48 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={salesGraph}>
+              <AreaChart data={salesGraph} margin={{ top: 18, right: 10, left: -15, bottom: 0 }}>
                 <defs>
                   <linearGradient id="shopSales" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -631,8 +631,27 @@ export default function ShopDetailsClient() {
                 <YAxis stroke="#64748b" fontSize={9} tickFormatter={(v) => `₹${v}`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#059669', borderRadius: '10px', fontSize: '10px' }}
+                  formatter={(v: any) => [`₹${v}`, 'Sales']}
                 />
-                <Area type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={2} fill="url(#shopSales)" />
+                <Area
+                  type="monotone"
+                  dataKey="amount"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  fill="url(#shopSales)"
+                  dot={{ r: 3, fill: '#10b981', stroke: '#064e3b', strokeWidth: 1 }}
+                  activeDot={{ r: 5, fill: '#34d399' }}
+                >
+                  <LabelList
+                    dataKey="amount"
+                    position="top"
+                    offset={6}
+                    fill="#34d399"
+                    fontSize={8}
+                    fontWeight="bold"
+                    formatter={(v: any) => (v ? `₹${Number(v).toLocaleString('en-IN')}` : '')}
+                  />
+                </Area>
               </AreaChart>
             </ResponsiveContainer>
           </div>

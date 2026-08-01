@@ -215,7 +215,9 @@ export const dashboardAPI = {
       const shops = getStorage<any[]>('shops', []);
       const deliveries = getStorage<any[]>('deliveries', []);
       const returns = getStorage<any[]>('returns', []);
+      const payments = getStorage<any[]>('payments', []);
       const totalRev = deliveries.reduce((acc, d) => acc + (d.netAmount || 0), 0);
+      const totalCollectionAllTime = payments.reduce((acc, p) => acc + (p.amount || 0), 0);
       const totalDeliveredPackets = deliveries.reduce((acc, d) => {
         return acc + (d.items?.reduce((iSum: number, item: any) => iSum + Number(item.quantity || 0), 0) || 0);
       }, 0);
@@ -241,6 +243,8 @@ export const dashboardAPI = {
           weeklySales: totalRev,
           monthlySales: totalRev,
           totalRevenue: totalRev,
+          totalSalesAllTime: totalRev,
+          totalCollectionAllTime,
           pendingCollection: 0,
           totalDeliveredPackets,
           totalDeliveredAmount: totalRev,

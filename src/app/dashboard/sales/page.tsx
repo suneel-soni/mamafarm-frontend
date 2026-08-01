@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { dashboardAPI } from '@/services/api';
 import { SalesPerformanceData } from '@/types';
-import { TrendingUp, ArrowUpRight, Award, BarChart3, ChevronRight, PackageCheck, RefreshCw } from 'lucide-react';
+import { TrendingUp, ArrowUpRight, Award, BarChart3, ChevronRight, PackageCheck, RefreshCw, DollarSign, Wallet, Zap, Receipt, Calendar } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import {
   ResponsiveContainer,
@@ -17,6 +17,7 @@ import {
   CartesianGrid,
   BarChart,
   Bar,
+  LabelList,
 } from 'recharts';
 
 export default function SalesPerformancePage() {
@@ -58,6 +59,8 @@ export default function SalesPerformancePage() {
   const pendingCollection = salesData.pendingCollection ?? 0;
   const weeklySales = salesData.weeklySales ?? 0;
   const monthlySales = salesData.monthlySales ?? 0;
+  const totalSalesAllTime = salesData.totalSalesAllTime ?? salesData.totalRevenue ?? 0;
+  const totalCollectionAllTime = salesData.totalCollectionAllTime ?? salesData.monthlyGraph?.reduce((sum, m) => sum + (m.collections || 0), 0) ?? 0;
   const totalDeliveredPackets = salesData.totalDeliveredPackets ?? 0;
   const totalDeliveredAmount = salesData.totalDeliveredAmount ?? 0;
   const totalReplacedPackets = salesData.totalReplacedPackets ?? 0;
@@ -81,10 +84,13 @@ export default function SalesPerformancePage() {
           </div>
         </div>
 
-        {/* 2 & 3 Column Touch Metric Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        {/* 2, 3 & 4 Column Touch Metric Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
           <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md">
-            <p className="text-[10px] text-slate-400 font-semibold">Today's Sales</p>
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+              <span>Today's Sales</span>
+              <Zap className="w-3.5 h-3.5 text-emerald-400" />
+            </p>
             <p className="text-lg font-extrabold text-emerald-400 mt-0.5">
               ₹{todaySales.toLocaleString('en-IN')}
             </p>
@@ -94,7 +100,10 @@ export default function SalesPerformancePage() {
           </div>
 
           <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md">
-            <p className="text-[10px] text-slate-400 font-semibold">Total Due</p>
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+              <span>Total Due</span>
+              <Receipt className="w-3.5 h-3.5 text-amber-400" />
+            </p>
             <p className="text-lg font-extrabold text-amber-400 mt-0.5">
               ₹{pendingCollection.toLocaleString('en-IN')}
             </p>
@@ -102,7 +111,10 @@ export default function SalesPerformancePage() {
           </div>
 
           <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md">
-            <p className="text-[10px] text-slate-400 font-semibold">Weekly Sales</p>
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+              <span>Weekly Sales</span>
+              <Calendar className="w-3.5 h-3.5 text-emerald-300" />
+            </p>
             <p className="text-base font-bold text-emerald-300 mt-0.5">
               ₹{weeklySales.toLocaleString('en-IN')}
             </p>
@@ -110,17 +122,46 @@ export default function SalesPerformancePage() {
           </div>
 
           <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md">
-            <p className="text-[10px] text-slate-400 font-semibold">Monthly Sales</p>
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+              <span>Monthly Sales</span>
+              <BarChart3 className="w-3.5 h-3.5 text-slate-300" />
+            </p>
             <p className="text-base font-bold text-white mt-0.5">
               ₹{monthlySales.toLocaleString('en-IN')}
             </p>
             <p className="text-[9px] text-slate-500">This Month</p>
           </div>
 
+          <div className="bg-slate-900/90 border border-teal-900/50 rounded-2xl p-3 shadow-md">
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+              <span>Total Sales</span>
+              <DollarSign className="w-3.5 h-3.5 text-teal-400" />
+            </p>
+            <p className="text-base font-extrabold text-teal-400 mt-0.5">
+              ₹{totalSalesAllTime.toLocaleString('en-IN')}
+            </p>
+            <p className="text-[9px] text-teal-300/80 mt-0.5 font-semibold">
+              Lifetime Sales
+            </p>
+          </div>
+
+          <div className="bg-slate-900/90 border border-indigo-900/50 rounded-2xl p-3 shadow-md">
+            <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
+              <span>Total Collection</span>
+              <Wallet className="w-3.5 h-3.5 text-indigo-400" />
+            </p>
+            <p className="text-base font-extrabold text-indigo-400 mt-0.5">
+              ₹{totalCollectionAllTime.toLocaleString('en-IN')}
+            </p>
+            <p className="text-[9px] text-indigo-300/80 mt-0.5 font-semibold">
+              Lifetime Collections
+            </p>
+          </div>
+
           <div className="bg-slate-900/90 border border-blue-900/40 rounded-2xl p-3 shadow-md">
             <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
-              Total Delivered
-              {/* <PackageCheck className="w-3.5 h-3.5 text-blue-400" /> */}
+              <span>Total Delivered</span>
+              <PackageCheck className="w-3.5 h-3.5 text-blue-400" />
             </p>
             <p className="text-base font-extrabold text-blue-400 mt-0.5">
               {totalDeliveredPackets.toLocaleString('en-IN')} <span className="text-xs font-semibold text-blue-300/80">Pkts</span>
@@ -132,8 +173,8 @@ export default function SalesPerformancePage() {
 
           <div className="bg-slate-900/90 border border-purple-900/40 rounded-2xl p-3 shadow-md">
             <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
-              Total Replaced
-              {/* <RefreshCw className="w-3.5 h-3.5 text-purple-400" /> */}
+              <span>Total Replaced</span>
+              <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
             </p>
             <p className="text-base font-extrabold text-purple-400 mt-0.5">
               {totalReplacedPackets.toLocaleString('en-IN')} <span className="text-xs font-semibold text-purple-300/80">Pkts</span>
@@ -153,9 +194,9 @@ export default function SalesPerformancePage() {
             <span className="text-[9px] text-slate-400">14 Days</span>
           </div>
 
-          <div className="h-44 w-full">
+          <div className="h-52 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={salesData.dailyGraph || []}>
+              <AreaChart data={salesData.dailyGraph || []} margin={{ top: 18, right: 10, left: -15, bottom: 0 }}>
                 <defs>
                   <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -169,7 +210,26 @@ export default function SalesPerformancePage() {
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#059669', borderRadius: '10px', fontSize: '10px' }}
                   formatter={(v: any) => [`₹${v}`, 'Sales']}
                 />
-                <Area type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#salesGrad)" />
+                <Area
+                  type="monotone"
+                  dataKey="sales"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#salesGrad)"
+                  dot={{ r: 3, fill: '#10b981', stroke: '#064e3b', strokeWidth: 1 }}
+                  activeDot={{ r: 5, fill: '#34d399' }}
+                >
+                  <LabelList
+                    dataKey="sales"
+                    position="top"
+                    offset={6}
+                    fill="#34d399"
+                    fontSize={8}
+                    fontWeight="bold"
+                    formatter={(v: any) => (v ? `₹${Number(v).toLocaleString('en-IN')}` : '')}
+                  />
+                </Area>
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -179,17 +239,37 @@ export default function SalesPerformancePage() {
         <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3.5 shadow-md space-y-2">
           <h3 className="font-bold text-white text-xs">Monthly Sales vs Collections</h3>
 
-          <div className="h-44 w-full">
+          <div className="h-52 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={salesData.monthlyGraph || []}>
+              <BarChart data={salesData.monthlyGraph || []} margin={{ top: 18, right: 10, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                 <XAxis dataKey="month" stroke="#64748b" fontSize={9} />
                 <YAxis stroke="#64748b" fontSize={9} tickFormatter={(v) => `₹${v}`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#059669', borderRadius: '10px', fontSize: '10px' }}
                 />
-                <Bar dataKey="sales" fill="#10b981" radius={[3, 3, 0, 0]} name="Sales" />
-                <Bar dataKey="collections" fill="#14b8a6" radius={[3, 3, 0, 0]} name="Collections" />
+                <Bar dataKey="sales" fill="#10b981" radius={[3, 3, 0, 0]} name="Sales">
+                  <LabelList
+                    dataKey="sales"
+                    position="top"
+                    offset={4}
+                    fill="#34d399"
+                    fontSize={7.5}
+                    fontWeight="bold"
+                    formatter={(v: any) => (v ? `₹${Number(v) >= 1000 ? `${(Number(v) / 1000).toFixed(Number(v) % 1000 === 0 ? 0 : 1)}k` : v}` : '')}
+                  />
+                </Bar>
+                <Bar dataKey="collections" fill="#14b8a6" radius={[3, 3, 0, 0]} name="Collections">
+                  <LabelList
+                    dataKey="collections"
+                    position="top"
+                    offset={4}
+                    fill="#2dd4bf"
+                    fontSize={7.5}
+                    fontWeight="bold"
+                    formatter={(v: any) => (v ? `₹${Number(v) >= 1000 ? `${(Number(v) / 1000).toFixed(Number(v) % 1000 === 0 ? 0 : 1)}k` : v}` : '')}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -230,8 +310,9 @@ export default function SalesPerformancePage() {
                     <p className="font-bold text-white text-xs truncate group-hover:text-emerald-400 transition-colors">
                       {shop.shopName || 'Shop'}
                     </p>
-                    <p className="text-[10px] text-emerald-400 font-bold">
-                      ₹{shopSales.toLocaleString('en-IN')}
+                    <p className="text-[10px] text-emerald-400 font-bold flex items-center gap-1.5 mt-0.5">
+                      <span>₹{shopSales.toLocaleString('en-IN')}</span>
+                      <span className="text-slate-400 font-medium">({(shop.deliveredQty ?? 0).toLocaleString('en-IN')} Pkts)</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5">
