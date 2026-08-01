@@ -468,11 +468,89 @@ export default function ShopDetailsClient() {
   const totalSalesPayment = summary.totalPaid ?? summary.totalPaidAmount ?? shop.totalPaidAmount ?? 0;
   const pendingPaymentVal = summary.pendingPayment ?? shop.outstandingBalance ?? 0;
 
-  const salesGraph = details?.salesGraph || [
-    { date: 'Jul 15', amount: shop.totalDeliveredValue || 2400 },
-    { date: 'Jul 18', amount: (shop.totalDeliveredValue || 2400) * 0.8 },
-    { date: 'Jul 22', amount: shop.totalDeliveredValue || 3200 },
-  ];
+  // Merge multiple dispatch orders by date for Historical Chart
+  const buildDateWiseChartData = () => {
+    const rawDeliveries = details?.deliveries || details?.deliveryHistory || [];
+
+    if (Array.isArray(rawDeliveries) && rawDeliveries.length > 0) {
+      const mapByDate = new Map<string, { date: string; amount: number; ordersCount: number; packetsCount: number; timestamp: number }>();
+
+      rawDeliveries.forEach((d: any) => {
+        const rawDate = d.deliveryDate || d.createdAt || d.timestamp || d.date;
+        const dateObj = rawDate ? new Date(rawDate) : null;
+
+        let dateKey = '';
+        let displayDate = '';
+        let ts = 0;
+
+        if (dateObj && !isNaN(dateObj.getTime())) {
+          dateKey = dateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+          displayDate = dateObj.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric' });
+          ts = dateObj.getTime();
+        } else if (typeof d.date === 'string' && d.date) {
+          dateKey = d.date.split(',')[0].trim();
+          displayDate = dateKey;
+          ts = d.timestamp || 0;
+        } else {
+          return;
+        }
+
+        const amt = Number(d.netAmount !== undefined ? d.netAmount : (d.debit !== undefined ? d.debit : (d.amount || 0)));
+        const packets = Array.isArray(d.items)
+          ? d.items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0)
+          : Number(d.quantity || 0);
+
+        if (mapByDate.has(dateKey)) {
+          const existing = mapByDate.get(dateKey)!;
+          existing.amount += amt;
+          existing.ordersCount += 1;
+          existing.packetsCount += packets;
+          if (ts && ts < existing.timestamp) existing.timestamp = ts;
+        } else {
+          mapByDate.set(dateKey, {
+            date: displayDate,
+            amount: amt,
+            ordersCount: 1,
+            packetsCount: packets,
+            timestamp: ts,
+          });
+        }
+      });
+
+      const aggregated = Array.from(mapByDate.values());
+      aggregated.sort((a, b) => a.timestamp - b.timestamp);
+
+      if (aggregated.length > 0) {
+        return aggregated;
+      }
+    }
+
+    const rawGraph = details?.salesGraph || [];
+    if (Array.isArray(rawGraph) && rawGraph.length > 0) {
+      const graphMap = new Map<string, { date: string; amount: number; ordersCount: number }>();
+      rawGraph.forEach((item: any) => {
+        const dStr = String(item.date || '').trim();
+        if (!dStr) return;
+        const amt = Number(item.amount || 0);
+        if (graphMap.has(dStr)) {
+          const existing = graphMap.get(dStr)!;
+          existing.amount += amt;
+          existing.ordersCount += 1;
+        } else {
+          graphMap.set(dStr, { date: dStr, amount: amt, ordersCount: 1 });
+        }
+      });
+      return Array.from(graphMap.values());
+    }
+
+    return [
+      { date: 'Jul 15', amount: shop.totalDeliveredValue || 2400, ordersCount: 1 },
+      { date: 'Jul 18', amount: Math.round((shop.totalDeliveredValue || 2400) * 0.8), ordersCount: 1 },
+      { date: 'Jul 22', amount: shop.totalDeliveredValue || 3200, ordersCount: 1 },
+    ];
+  };
+
+  const salesGraph = buildDateWiseChartData();
 
   const ledger = details?.ledger || (details?.deliveryHistory ? details.deliveryHistory.map((d: any) => ({
     date: formatDateTimeIST(d.deliveryDate || d.createdAt),
@@ -616,7 +694,12 @@ export default function ShopDetailsClient() {
 
         {/* Historical Chart */}
         <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3.5 shadow-md space-y-2">
-          <h3 className="font-bold text-white text-xs">Dispatch Sales History</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-white text-xs">Dispatch Sales History</h3>
+            <span className="text-[9px] px-2 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-800/50 rounded-full font-semibold">
+              Date-Wise Merged
+            </span>
+          </div>
           <div className="h-48 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesGraph} margin={{ top: 18, right: 10, left: -15, bottom: 0 }}>
@@ -630,8 +713,30 @@ export default function ShopDetailsClient() {
                 <XAxis dataKey="date" stroke="#64748b" fontSize={9} />
                 <YAxis stroke="#64748b" fontSize={9} tickFormatter={(v) => `₹${v}`} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#059669', borderRadius: '10px', fontSize: '10px' }}
-                  formatter={(v: any) => [`₹${v}`, 'Sales']}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900 border border-emerald-600/80 p-2.5 rounded-xl text-[10px] space-y-1 shadow-xl text-white">
+                          <p className="font-bold text-emerald-400">{data.date}</p>
+                          <p className="text-white font-bold text-xs">
+                            ₹{Number(data.amount).toLocaleString('en-IN')}
+                          </p>
+                          {data.ordersCount > 1 ? (
+                            <p className="text-amber-300 font-medium">
+                              {data.ordersCount} Dispatches Merged
+                            </p>
+                          ) : (
+                            <p className="text-slate-400">1 Dispatch Order</p>
+                          )}
+                          {data.packetsCount ? (
+                            <p className="text-emerald-300/80 font-mono">{data.packetsCount} Packets Total</p>
+                          ) : null}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
                 <Area
                   type="monotone"

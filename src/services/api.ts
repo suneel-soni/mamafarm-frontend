@@ -455,11 +455,27 @@ export const shopsAPI = {
             currentQuantity: shop?.currentQuantity || 40,
             pendingPayment: shop?.outstandingBalance || 1800,
           },
-          salesGraph: [
-            { date: 'Jul 18', amount: 1200 },
-            { date: 'Jul 21', amount: 1800 },
-            { date: 'Jul 24', amount: 2400 },
-          ],
+          salesGraph: (() => {
+            const salesByDateMap = new Map<string, { date: string; amount: number; ordersCount: number }>();
+            shopDeliveries.forEach((d) => {
+              const dateObj = new Date(d.deliveryDate || Date.now());
+              const dateStr = dateObj.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric' });
+              const key = dateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+              if (salesByDateMap.has(key)) {
+                const existing = salesByDateMap.get(key)!;
+                existing.amount += Number(d.netAmount || 0);
+                existing.ordersCount += 1;
+              } else {
+                salesByDateMap.set(key, { date: dateStr, amount: Number(d.netAmount || 0), ordersCount: 1 });
+              }
+            });
+            const aggregated = Array.from(salesByDateMap.values());
+            return aggregated.length > 0 ? aggregated : [
+              { date: 'Jul 18', amount: 1200, ordersCount: 1 },
+              { date: 'Jul 21', amount: 1800, ordersCount: 1 },
+              { date: 'Jul 24', amount: 2400, ordersCount: 1 },
+            ];
+          })(),
           deliveryHistory: shopDeliveries,
           ledger: shopDeliveries.map((d) => ({
             date: new Date(d.deliveryDate || Date.now()).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }),

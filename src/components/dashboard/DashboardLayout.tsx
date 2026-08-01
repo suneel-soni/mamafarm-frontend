@@ -104,9 +104,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Mobile Header Bar */}
         <header className="sticky top-0 z-40 bg-[#162111]/95 backdrop-blur-md border-b border-[#283C06]/50 px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#FEFEFE] p-0.5 shrink-0 border border-[#8B7E2A]/40 shadow-sm flex items-center justify-center">
+            <Link
+              href="/"
+              className="w-9 h-9 rounded-xl bg-[#FEFEFE] p-0.5 shrink-0 border border-[#8B7E2A]/40 shadow-sm flex items-center justify-center hover:opacity-90 transition-all active:scale-95 cursor-pointer"
+              title="Go to Home"
+            >
               <img src="/logo.png" alt="MamaFarm Logo" className="w-full h-full object-contain" />
-            </div>
+            </Link>
             <div>
               <p className="font-extrabold text-base text-[#8B7E2A]">{currentTab.label}</p>
             </div>
@@ -166,14 +170,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end">
             <div className="bg-[#162111] border-t border-[#283C06]/60 rounded-t-3xl p-5 space-y-4 shadow-2xl max-w-md w-full mx-auto animate-in slide-in-from-bottom duration-200">
               <div className="flex justify-between items-center border-b border-[#283C06]/40 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-[#FEFEFE] p-0.5 border border-[#8B7E2A]/40">
+                <Link
+                  href="/"
+                  onClick={() => setMoreMenuOpen(false)}
+                  className="flex items-center gap-2 group cursor-pointer"
+                  title="Go to Home"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-[#FEFEFE] p-0.5 border border-[#8B7E2A]/40 group-hover:opacity-90 transition-opacity">
                     <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
                   </div>
-                  <h3 className="font-bold text-[#FEFEFE] text-sm">
+                  <h3 className="font-bold text-[#FEFEFE] text-sm group-hover:text-[#8B7E2A] transition-colors">
                     Mama Farm Options
                   </h3>
-                </div>
+                </Link>
                 <button onClick={() => setMoreMenuOpen(false)} className="text-slate-400 hover:text-white p-1">
                   <X className="w-5 h-5" />
                 </button>
