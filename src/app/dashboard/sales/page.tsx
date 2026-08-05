@@ -60,7 +60,7 @@ export default function SalesPerformancePage() {
   const weeklySales = salesData.weeklySales ?? 0;
   const monthlySales = salesData.monthlySales ?? 0;
   const totalSalesAllTime = salesData.totalSalesAllTime ?? salesData.totalRevenue ?? 0;
-  const totalCollectionAllTime = salesData.totalCollectionAllTime ?? salesData.monthlyGraph?.reduce((sum, m) => sum + (m.collections || 0), 0) ?? 0;
+  const totalCollectionAllTime = Math.max(0, totalSalesAllTime - pendingCollection);
   const totalDeliveredPackets = salesData.totalDeliveredPackets ?? 0;
   const totalDeliveredAmount = salesData.totalDeliveredAmount ?? 0;
   const totalReplacedPackets = salesData.totalReplacedPackets ?? 0;
