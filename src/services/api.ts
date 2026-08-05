@@ -401,7 +401,26 @@ function recalculateShopLocalStorage(shopId: string) {
     }
   });
 
-  const grossPaid = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const isDeliveryPayment = (p: any) => {
+    const notes = (p.notes || '').toLowerCase();
+    return (
+      notes.includes('delivery') ||
+      notes.includes('dispatch') ||
+      notes.includes('order') ||
+      notes.includes('collected') ||
+      notes.includes('immediate') ||
+      notes.includes('settlement') ||
+      Boolean(p.delivery) ||
+      Boolean(p.deliveryId)
+    );
+  };
+
+  const standalonePayments = payments.filter((p: any) => !isDeliveryPayment(p));
+
+  const totalDeliveryPaid = deliveries.reduce((sum, d) => sum + Number(d.amountPaid || 0), 0);
+  const totalStandalonePaid = standalonePayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const grossPaid = totalDeliveryPaid + totalStandalonePaid;
+
   const netSalesVal = Math.max(0, grossDeliveredValue - totalRefunds);
   const netSalesPayment = Math.min(grossPaid, netSalesVal);
   const outstandingBalance = Math.max(0, netSalesVal - grossPaid);
@@ -698,7 +717,20 @@ export const returnsAPI = {
       const returns = getStorage<any[]>('returns', []);
       const index = returns.findIndex((r) => r._id === id || r.returnNumber === id);
       if (index !== -1) {
-        returns[index] = { ...returns[index], ...data };
+        const isRep = data.type === 'replacement' || data.isReplacement === true;
+        const rawItems = data.items || returns[index].items || [];
+        const normalizedItems = rawItems.map((item: any) => ({
+          ...item,
+          amount: isRep ? 0 : (item.amount || 0),
+        }));
+        returns[index] = {
+          ...returns[index],
+          ...data,
+          isReplacement: isRep,
+          type: isRep ? 'replacement' : 'return',
+          items: normalizedItems,
+          totalRefundAmount: isRep ? 0 : (data.totalRefundAmount || 0),
+        };
         setStorage('returns', returns);
         if (returns[index]?.shopId || returns[index]?.shop) {
           recalculateShopLocalStorage(returns[index].shopId || returns[index].shop);
@@ -781,6 +813,48 @@ export const paymentsAPI = {
 
       setStorage('payments', [newPayment, ...payments]);
       return { success: true, isFallback: true, message: 'Server offline. Payment recorded locally.', data: newPayment };
+    }
+  },
+  update: async (id: string, data: any): Promise<ApiResponse> => {
+    try {
+      const res = await api.put(`/payments/${id}`, data);
+      return res.data;
+    } catch (error: any) {
+      const errInfo = extractApiError(error);
+      if (!errInfo.isNetworkError) {
+        return { success: false, message: errInfo.message, statusCode: errInfo.statusCode };
+      }
+      const payments = getStorage<any[]>('payments', []);
+      const index = payments.findIndex((p) => p._id === id || p.paymentNumber === id);
+      if (index !== -1) {
+        payments[index] = { ...payments[index], ...data };
+        setStorage('payments', payments);
+        const targetShopId = payments[index].shopId || payments[index].shop;
+        if (targetShopId) {
+          recalculateShopLocalStorage(targetShopId);
+        }
+      }
+      return { success: true, isFallback: true, message: 'Server offline. Payment updated locally.' };
+    }
+  },
+  delete: async (id: string): Promise<ApiResponse> => {
+    try {
+      const res = await api.delete(`/payments/${id}`);
+      return res.data;
+    } catch (error: any) {
+      const errInfo = extractApiError(error);
+      if (!errInfo.isNetworkError) {
+        return { success: false, message: errInfo.message, statusCode: errInfo.statusCode };
+      }
+      const payments = getStorage<any[]>('payments', []);
+      const itemToDelete = payments.find((p) => p._id === id || p.paymentNumber === id);
+      const updated = payments.filter((p) => p._id !== id && p.paymentNumber !== id);
+      setStorage('payments', updated);
+      const targetShopId = itemToDelete?.shopId || itemToDelete?.shop;
+      if (targetShopId) {
+        recalculateShopLocalStorage(targetShopId);
+      }
+      return { success: true, isFallback: true, message: 'Server offline. Payment deleted locally.' };
     }
   },
 };

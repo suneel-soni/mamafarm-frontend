@@ -295,6 +295,7 @@ export default function DeliveriesPage() {
                           <option value="Moong Sprouts">Moong Sprouts</option>
                           <option value="Chana Sprouts">Chana Sprouts</option>
                           <option value="Mixed Sprouts">Mixed Sprouts</option>
+                          <option value="Horse Gram Sprouts">Horse Gram Sprouts</option>
                         </select>
                       </div>
 

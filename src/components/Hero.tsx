@@ -41,7 +41,7 @@ export default function Hero() {
             🌱 100% Organic Sprouts
           </div>
           <p className="text-white text-xs font-semibold drop-shadow-md">
-            Daily Fresh Moong, Chana & Mixed Sprouts
+            Daily Fresh Moong, Chana, Horse Gram & Mixed Sprouts
           </p>
         </div>
       </div>
@@ -54,7 +54,7 @@ export default function Hero() {
         </h1>
 
         <p className="text-slate-300 text-xs leading-relaxed mb-4 max-w-xs mx-auto">
-          Nutrient-dense Moong, Chana & Mixed Sprouts grown using pure filtered water. High protein superfood for a healthier life!
+          Nutrient-dense Moong, Chana, Horse Gram & Mixed Sprouts grown using pure filtered water. High protein superfood for a healthier life!
         </p>
 
         {/* Quick Action Buttons */}

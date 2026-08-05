@@ -205,6 +205,7 @@ export default function ProductionPage() {
                     ))}
                     <option value="Raw Green Moong Grain">Raw Green Moong Grain</option>
                     <option value="Desi Brown Chana Grain">Desi Brown Chana Grain</option>
+                    <option value="Horse Gram Grain">Horse Gram Grain</option>
                   </select>
                 </div>
 
@@ -249,6 +250,7 @@ export default function ProductionPage() {
                       <option value="Moong Sprouts">Moong Sprouts</option>
                       <option value="Chana Sprouts">Chana Sprouts</option>
                       <option value="Mixed Sprouts">Mixed Sprouts</option>
+                      <option value="Horse Gram Sprouts">Horse Gram Sprouts</option>
                     </select>
                   </div>
 

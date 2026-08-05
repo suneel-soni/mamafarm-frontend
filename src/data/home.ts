@@ -54,6 +54,12 @@ export const ingredientsData: Ingredient[] = [
 		description: 'A wholesome power blend of Moong, Chana, and legumes for balanced nutrients and delicious texture.',
 	},
 	{
+		id: 'horsegram',
+		name: 'Horse Gram Sprouts',
+		image: '/images/horsegram-sprouts.jpg',
+		description: 'Traditional superfood sprouts rich in iron, calcium, and protein. Known for boosting metabolism and vital strength.',
+	},
+	{
 		id: 'water',
 		name: 'Filtered Water Soak',
 		image: '/images/pure-water.jpg',
@@ -63,11 +69,17 @@ export const ingredientsData: Ingredient[] = [
 
 export const whyUsChecklist: string[] = [
 	'100% Organic Sprouts',
-	'Zero Preservatives',
-	'Filtered Water Process',
-	'Daily Fresh Dispatch',
-	'Hygienically Packed',
-	'High Protein & Fiber',
+	'Daily Fresh Yields',
+	'Purified RO Water Germination',
+	'Hygienic Sealed Pouches',
+	'Zero Preservatives or Chemicals',
+];
+
+export const heroStatsData = [
+	{ value: '100%', label: 'Organic & Fresh' },
+	{ value: '25+', label: 'Retail Partners' },
+	{ value: '500+', label: 'Daily Fresh Packs' },
+	{ value: '0%', label: 'Preservatives' },
 ];
 
 export const processSteps: ProcessStep[] = [
@@ -195,7 +207,7 @@ export const faqData: FaqItem[] = [
 	{
 		id: 'faq-2',
 		question: 'What varieties of sprouts are available?',
-		answer: 'We currently offer Moong Sprouts, Chana Sprouts, and Mixed Sprouts packed in convenient food-grade pouches.',
+		answer: 'We currently offer Moong Sprouts, Chana Sprouts, Mixed Sprouts, and Horse Gram Sprouts packed in convenient food-grade pouches.',
 	},
 	{
 		id: 'faq-3',

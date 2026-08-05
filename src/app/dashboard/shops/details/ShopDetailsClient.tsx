@@ -41,9 +41,10 @@ export default function ShopDetailsClient() {
 
   // Order Form State
   const [sproutType, setSproutType] = useState('Moong Sprouts');
-  const [orderQty, setOrderQty] = useState(5);
-  const [orderRate, setOrderQtyRate] = useState(20);
-  const [amountPaid, setAmountPaid] = useState(0);
+  const [orderQty, setOrderQty] = useState<number | string>(5);
+  const [orderRate, setOrderQtyRate] = useState<number | string>(20);
+  const [amountPaid, setAmountPaid] = useState<number | string>(0);
+  const [autoCalcCash, setAutoCalcCash] = useState(false);
 
   // Return / Replacement Form State
   const [recordType, setRecordType] = useState<'return' | 'replacement'>('return');
@@ -68,6 +69,14 @@ export default function ShopDetailsClient() {
   const [transactionRef, setTransactionRef] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
 
+  // Edit Payment Settlement State
+  const [editPaymentModalOpen, setEditPaymentModalOpen] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState('');
+  const [editPaymentAmount, setEditPaymentAmount] = useState<number | string>(0);
+  const [editPaymentMethod, setEditPaymentMethod] = useState<'cash' | 'upi' | 'bank_transfer' | 'cheque'>('cash');
+  const [editTransactionRef, setEditTransactionRef] = useState('');
+  const [editPaymentNotes, setEditPaymentNotes] = useState('Later Paid Settlement');
+
   // Edit Order Modal State
   const [editOrderModalOpen, setEditOrderModalOpen] = useState(false);
   const [editingDeliveryId, setEditingDeliveryId] = useState('');
@@ -75,6 +84,7 @@ export default function ShopDetailsClient() {
   const [editOrderQty, setEditOrderQty] = useState<number | string>(5);
   const [editOrderRate, setEditOrderRate] = useState<number | string>(20);
   const [editAmountPaid, setEditAmountPaid] = useState<number | string>(0);
+  const [editAutoCalcCash, setEditAutoCalcCash] = useState(false);
 
   const { showSuccess, showError, showWarning } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,6 +95,7 @@ export default function ShopDetailsClient() {
     setOrderQty(5);
     setOrderQtyRate(20);
     setAmountPaid(0);
+    setAutoCalcCash(false);
     setOrderModalOpen(true);
   };
 
@@ -96,10 +107,15 @@ export default function ShopDetailsClient() {
 
     setEditingDeliveryId(deliveryId);
     const item = rawDelivery.items?.[0] || {};
+    const q = item.quantity !== undefined ? item.quantity : 1;
+    const r = item.rate !== undefined ? item.rate : 20;
+    const paid = rawDelivery.amountPaid !== undefined ? rawDelivery.amountPaid : (entry.amountPaid || 0);
+
     setEditSproutType(item.sproutType || 'Moong Sprouts');
-    setEditOrderQty(item.quantity !== undefined ? item.quantity : 1);
-    setEditOrderRate(item.rate !== undefined ? item.rate : 20);
-    setEditAmountPaid(rawDelivery.amountPaid !== undefined ? rawDelivery.amountPaid : (entry.amountPaid || 0));
+    setEditOrderQty(q);
+    setEditOrderRate(r);
+    setEditAmountPaid(paid);
+    setEditAutoCalcCash(Number(paid) > 0 && Number(paid) >= Number(q) * Number(r));
     setEditOrderModalOpen(true);
   };
 
@@ -338,20 +354,63 @@ export default function ShopDetailsClient() {
           showSuccess('Payment recorded & dispatch status updated!');
         }
       } else {
+        const totalPayToAllocate = Number(paymentAmount);
+        let remainingToAllocate = totalPayToAllocate;
+
+        const rawDeliveries = details?.deliveries || details?.deliveryHistory || [];
+        const unpaidDeliveries = rawDeliveries
+          .map((d: any) => {
+            const net = Number(d.netAmount !== undefined ? d.netAmount : (d.debit !== undefined ? d.debit : (d.amount || 0)));
+            const paid = Number(d.amountPaid !== undefined ? d.amountPaid : (d.credit || 0));
+            const due = Math.max(0, net - paid);
+            return {
+              id: d._id || d.id,
+              net,
+              paid,
+              due,
+              ref: d.deliveryNumber || d.reference || 'DEL-2026',
+            };
+          })
+          .filter((d: any) => d.due > 0);
+
+        const updatedRefs: string[] = [];
+
+        for (const del of unpaidDeliveries) {
+          if (remainingToAllocate <= 0) break;
+
+          const alloc = Math.min(remainingToAllocate, del.due);
+          const newPaid = del.paid + alloc;
+          const newStatus = newPaid >= del.net ? 'paid' : 'partial';
+
+          await deliveriesAPI.update(del.id, {
+            amountPaid: newPaid,
+            paymentStatus: newStatus,
+          });
+
+          updatedRefs.push(del.ref);
+          remainingToAllocate -= alloc;
+        }
+
+        const noteText = paymentNotes || (
+          updatedRefs.length > 0
+            ? `Collected payment for order (${updatedRefs.join(', ')})`
+            : 'Settlement for account dues'
+        );
+
         const payload = {
           entityType: 'shop',
           shopId,
-          amount: Number(paymentAmount),
+          amount: totalPayToAllocate,
           paymentMethod,
           transactionRef,
-          notes: paymentNotes || 'Later Paid Settlement',
+          notes: noteText,
           paymentDate: new Date().toISOString(),
         };
 
         const res = await paymentsAPI.create(payload);
         if (res.success) {
-          if (res.isFallback) showWarning(res.message || 'Payment recorded locally (Offline mode).');
-          else showSuccess('Payment Received & Account Ledger Updated!');
+          if (res.isFallback) showWarning(res.message || 'Payment recorded locally.');
+          else showSuccess('All pending dues marked as paid!');
         } else {
           showError(res.message || 'Failed to record payment.');
         }
@@ -365,6 +424,65 @@ export default function ShopDetailsClient() {
       loadShopDetails();
     } catch (err: any) {
       showError(err.message || 'Error recording payment.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openEditPaymentModal = (entry: any) => {
+    const payId = entry._id || entry.id;
+    const rawPayment = details?.payments?.find((p: any) => String(p._id || p.id) === String(payId)) || entry;
+
+    setEditingPaymentId(payId);
+    setEditPaymentAmount(rawPayment.amount !== undefined ? rawPayment.amount : (entry.credit || entry.amount || 0));
+    setEditPaymentMethod(rawPayment.paymentMethod || 'cash');
+    setEditTransactionRef(rawPayment.transactionRef || '');
+    setEditPaymentNotes(rawPayment.notes || 'Later Paid Settlement');
+    setEditPaymentModalOpen(true);
+  };
+
+  const handleUpdatePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPaymentId) return;
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        amount: Number(editPaymentAmount) || 0,
+        paymentMethod: editPaymentMethod,
+        transactionRef: editTransactionRef,
+        notes: editPaymentNotes || 'Later Paid Settlement',
+      };
+
+      const res = await paymentsAPI.update(editingPaymentId, payload);
+      if (res.success) {
+        if (res.isFallback) showWarning(res.message || 'Payment updated locally.');
+        else showSuccess('Payment Settlement Updated Successfully!');
+        setEditPaymentModalOpen(false);
+        loadShopDetails();
+      } else {
+        showError(res.message || 'Failed to update payment settlement.');
+      }
+    } catch (err: any) {
+      showError(err.message || 'Error updating payment settlement.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeletePayment = async (payId: string) => {
+    if (!confirm('Are you sure you want to delete this payment settlement record? The shop account balance will be recalculated.')) return;
+    setIsSubmitting(true);
+    try {
+      const res = await paymentsAPI.delete(payId);
+      if (res.success) {
+        if (res.isFallback) showWarning(res.message || 'Payment deleted locally.');
+        else showSuccess('Payment Record Deleted Successfully!');
+        loadShopDetails();
+      } else {
+        showError(res.message || 'Failed to delete payment record.');
+      }
+    } catch (err: any) {
+      showError(err.message || 'Error deleting payment record.');
     } finally {
       setIsSubmitting(false);
     }
@@ -454,19 +572,49 @@ export default function ShopDetailsClient() {
     );
   }
 
-  const summary = details?.summary || {
-    totalDeliveredQty: shop.totalDeliveredQuantity || 0,
-    totalReturnedQty: shop.totalReturnedQuantity || 0,
-    totalReplacedQty: shop.totalReplacedQuantity || 0,
-    currentQuantity: shop.currentQuantity || (shop.totalDeliveredQuantity || 0) - (shop.totalReturnedQuantity || 0),
-    totalDeliveredValue: shop.totalDeliveredValue || 0,
-    totalPaidAmount: shop.totalPaidAmount || 0,
-    pendingPayment: shop.outstandingBalance || 0,
+  const ledger = details?.ledger || (details?.deliveryHistory ? details.deliveryHistory.map((d: any) => ({
+    date: formatDateTimeIST(d.deliveryDate || d.createdAt),
+    type: 'delivery',
+    reference: d.deliveryNumber || 'DEL-2026',
+    description: `Dispatched ${d.items?.map((i: any) => `${i.quantity} ${i.sproutType}`).join(', ') || 'Sprouts'}`,
+    debit: d.netAmount !== undefined ? d.netAmount : (d.debit !== undefined ? d.debit : (d.amount || 0)),
+    netAmount: d.netAmount !== undefined ? d.netAmount : (d.debit !== undefined ? d.debit : (d.amount || 0)),
+    credit: 0,
+    amountPaid: d.amountPaid !== undefined ? d.amountPaid : (d.credit || 0),
+    paymentStatus: d.paymentStatus || ((d.amountPaid || 0) >= (d.netAmount || 0) ? 'paid' : (d.amountPaid || 0) > 0 ? 'partial' : 'unpaid'),
+    balance: Math.max(0, (d.netAmount !== undefined ? d.netAmount : (d.debit || 0)) - (d.amountPaid || 0)),
+  })) : []);
+
+  // Compute pending due directly from ledger for guaranteed consistency with Account Ledger table
+  const computedLedgerDue = ledger.length > 0 ? Math.max(0, ledger.reduce((acc: number, entry: any) => {
+    if (entry.type === 'delivery') {
+      const total = Number(entry.netAmount !== undefined ? entry.netAmount : (entry.debit !== undefined ? entry.debit : (entry.amount || 0)));
+      const paid = Number(entry.amountPaid !== undefined ? entry.amountPaid : (entry.credit || 0));
+      return acc + Math.max(0, total - paid);
+    } else if (entry.type === 'payment') {
+      return acc - Number(entry.credit || entry.amount || 0);
+    } else if (entry.type === 'return') {
+      const isRep = entry.returnType === 'replacement' || entry.type === 'replacement' || entry.isReplacement;
+      return acc - (isRep ? 0 : Number(entry.credit || entry.totalRefundAmount || 0));
+    }
+    return acc;
+  }, 0)) : (details?.summary?.pendingPayment ?? shop?.outstandingBalance ?? 0);
+
+  const rawSummary = details?.summary || {};
+  const summary = {
+    totalDeliveredQty: rawSummary.totalDeliveredQty ?? shop.totalDeliveredQuantity ?? 0,
+    totalReturnedQty: rawSummary.totalReturnedQty ?? shop.totalReturnedQuantity ?? 0,
+    totalReplacedQty: rawSummary.totalReplacedQty ?? shop.totalReplacedQuantity ?? 0,
+    currentQuantity: rawSummary.currentQuantity ?? shop.currentQuantity ?? ((shop.totalDeliveredQuantity || 0) - (shop.totalReturnedQuantity || 0)),
+    totalDeliveredValue: rawSummary.totalDeliveredVal ?? rawSummary.totalDeliveredValue ?? shop.totalDeliveredValue ?? 0,
+    totalPaidAmount: rawSummary.totalPaid ?? rawSummary.totalPaidAmount ?? shop.totalPaidAmount ?? 0,
+    pendingPayment: computedLedgerDue,
+    dueSyncDate: rawSummary.dueSyncDate || '',
   };
 
-  const totalSalesVal = summary.totalDeliveredVal ?? summary.totalDeliveredValue ?? shop.totalDeliveredValue ?? 0;
-  const totalSalesPayment = summary.totalPaid ?? summary.totalPaidAmount ?? shop.totalPaidAmount ?? 0;
-  const pendingPaymentVal = summary.pendingPayment ?? shop.outstandingBalance ?? 0;
+  const totalSalesVal = summary.totalDeliveredValue;
+  const totalSalesPayment = summary.totalPaidAmount;
+  const pendingPaymentVal = summary.pendingPayment;
 
   // Merge multiple dispatch orders by date for Historical Chart
   const buildDateWiseChartData = () => {
@@ -551,18 +699,6 @@ export default function ShopDetailsClient() {
   };
 
   const salesGraph = buildDateWiseChartData();
-
-  const ledger = details?.ledger || (details?.deliveryHistory ? details.deliveryHistory.map((d: any) => ({
-    date: formatDateTimeIST(d.deliveryDate || d.createdAt),
-    type: 'delivery',
-    reference: d.deliveryNumber || 'DEL-2026',
-    description: `Dispatched ${d.items?.map((i: any) => `${i.quantity} ${i.sproutType}`).join(', ') || 'Sprouts'}`,
-    debit: d.netAmount || 0,
-    credit: 0,
-    amountPaid: d.amountPaid || 0,
-    paymentStatus: d.paymentStatus || ((d.amountPaid || 0) >= (d.netAmount || 0) ? 'paid' : (d.amountPaid || 0) > 0 ? 'partial' : 'unpaid'),
-    balance: (d.netAmount || 0) - (d.amountPaid || 0),
-  })) : []);
 
   return (
     <DashboardLayout>
@@ -649,13 +785,9 @@ export default function ShopDetailsClient() {
               <p className="text-[9px] text-slate-400 uppercase font-semibold">Total Sales</p>
               <p className="text-sm sm:text-base font-bold text-white mt-0.5">₹{totalSalesVal.toLocaleString('en-IN')}</p>
             </div>
-            {pendingPaymentVal > 0 ? (
-              <p className="text-[8px] font-bold text-amber-400 mt-1 truncate">
-                Dispatched (Due: ₹{pendingPaymentVal.toLocaleString('en-IN')})
-              </p>
-            ) : (
-              <p className="text-[8px] text-emerald-400 font-bold mt-1">Dispatched Value (Paid)</p>
-            )}
+            <p className="text-[8px] font-bold text-emerald-400 mt-1 truncate">
+              Collection: ₹{totalSalesPayment.toLocaleString('en-IN')}
+            </p>
           </div>
 
           {/* Pending Payment */}
@@ -666,7 +798,7 @@ export default function ShopDetailsClient() {
             </div>
             {pendingPaymentVal > 0 ? (
               <p className="text-[8px] text-amber-300/90 font-bold truncate mt-1">
-                Due: ₹{pendingPaymentVal.toLocaleString('en-IN')} {summary.dueSyncDate ? `(${summary.dueSyncDate})` : ''}
+                Pending payment
               </p>
             ) : (
               <p className="text-[8px] text-emerald-400 font-bold mt-1">✓ Fully Settled (No Due)</p>
@@ -786,8 +918,8 @@ export default function ShopDetailsClient() {
                 const isReplacement = entry.type === 'replacement' || entry.returnType === 'replacement';
                 const isPayment = entry.type === 'payment';
 
-                const totalAmount = entry.netAmount || entry.debit || 0;
-                const paidAmount = entry.amountPaid || 0;
+                const totalAmount = entry.netAmount !== undefined ? entry.netAmount : (entry.debit !== undefined ? entry.debit : (entry.amount || 0));
+                const paidAmount = entry.amountPaid !== undefined ? entry.amountPaid : (entry.credit || 0);
                 const unpaidDue = isDelivery ? Math.max(0, totalAmount - paidAmount) : 0;
                 const isPaid = isDelivery ? unpaidDue <= 0 || entry.paymentStatus === 'paid' : true;
 
@@ -857,6 +989,26 @@ export default function ShopDetailsClient() {
                             <button
                               onClick={() => handleDeleteReturn(entry._id || entry.id)}
                               title={isReplacement ? 'Delete Replacement Record' : 'Delete Return Record'}
+                              className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-rose-400 transition-colors shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Action buttons for Payment Settlement */}
+                        {isPayment && (
+                          <div className="flex items-center gap-1 pl-1 border-l border-slate-700/50 shrink-0">
+                            <button
+                              onClick={() => openEditPaymentModal(entry)}
+                              title="Edit Payment Settlement"
+                              className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-emerald-400 transition-colors shrink-0"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePayment(entry._id || entry.id)}
+                              title="Delete Payment Settlement"
                               className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-rose-400 transition-colors shrink-0"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -947,6 +1099,7 @@ export default function ShopDetailsClient() {
                     <option value="Moong Sprouts">Moong Sprouts</option>
                     <option value="Chana Sprouts">Chana Sprouts</option>
                     <option value="Mixed Sprouts">Mixed Sprouts</option>
+                    <option value="Horse Gram Sprouts">Horse Gram Sprouts</option>
                   </select>
                 </div>
 
@@ -960,7 +1113,11 @@ export default function ShopDetailsClient() {
                       onKeyDown={allowOnlyNumbersKeys}
                       onChange={(e) => {
                         const clean = sanitizeInteger(e.target.value);
-                        setOrderQty(clean === '' ? ('' as any) : Number(clean));
+                        const newQty = clean === '' ? ('' as any) : Number(clean);
+                        setOrderQty(newQty);
+                        if (autoCalcCash) {
+                          setAmountPaid((Number(newQty) || 0) * (Number(orderRate) || 0));
+                        }
                       }}
                       className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                     />
@@ -974,28 +1131,79 @@ export default function ShopDetailsClient() {
                       onKeyDown={allowOnlyDecimalKeys}
                       onChange={(e) => {
                         const clean = sanitizeDecimal(e.target.value);
-                        setOrderQtyRate(clean === '' ? ('' as any) : Number(clean));
+                        const newRate = clean === '' ? ('' as any) : Number(clean);
+                        setOrderQtyRate(newRate);
+                        if (autoCalcCash) {
+                          setAmountPaid((Number(orderQty) || 0) * (Number(newRate) || 0));
+                        }
                       }}
                       className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">
-                    Cash Collected Now (₹) <span className="text-amber-400 font-normal">(Leave 0 if Pay Later)</span>
-                  </label>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-semibold text-slate-300">
+                      Cash Collected Now (Payment Received ₹)
+                    </label>
+
+                    {/* Switch Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextState = !autoCalcCash;
+                        setAutoCalcCash(nextState);
+                        if (nextState) {
+                          setAmountPaid((Number(orderQty) || 0) * (Number(orderRate) || 0));
+                        }
+                      }}
+                      className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-750 px-2 py-0.5 rounded-full border border-emerald-900/50 transition-all cursor-pointer"
+                    >
+                      <span className={`text-[9px] font-bold ${autoCalcCash ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        {autoCalcCash ? 'Auto Full Amount' : 'Manual Entry'}
+                      </span>
+                      <div className={`w-7 h-3.5 flex items-center rounded-full p-0.5 transition-colors ${
+                        autoCalcCash ? 'bg-emerald-600' : 'bg-slate-700'
+                      }`}>
+                        <div className={`bg-white w-2.5 h-2.5 rounded-full shadow-md transform transition-transform ${
+                          autoCalcCash ? 'translate-x-3.5' : 'translate-x-0'
+                        }`} />
+                      </div>
+                    </button>
+                  </div>
+
                   <input
                     type="text"
                     inputMode="decimal"
                     value={amountPaid}
+                    readOnly={autoCalcCash}
                     onKeyDown={allowOnlyDecimalKeys}
                     onChange={(e) => {
-                      const clean = sanitizeDecimal(e.target.value);
-                      setAmountPaid(clean === '' ? ('' as any) : Number(clean));
+                      if (!autoCalcCash) {
+                        const clean = sanitizeDecimal(e.target.value);
+                        setAmountPaid(clean === '' ? ('' as any) : Number(clean));
+                      }
                     }}
-                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white font-bold"
+                    placeholder="0"
+                    className={`w-full bg-slate-800 border rounded-xl px-3 py-2 text-white font-bold transition-all ${
+                      autoCalcCash
+                        ? 'border-emerald-500/60 bg-emerald-950/20 text-emerald-300'
+                        : 'border-emerald-900/40 focus:border-emerald-500'
+                    }`}
                   />
+                  <p className="text-[9px] text-slate-400 flex justify-between items-center pt-0.5">
+                    <span>Total Order: ₹{(Number(orderQty) || 0) * (Number(orderRate) || 0)}</span>
+                    {autoCalcCash ? (
+                      <span className="text-emerald-400 font-bold">✓ Full payment received</span>
+                    ) : Number(amountPaid) > 0 ? (
+                      <span className="text-emerald-400 font-medium">
+                        Payment Received: ₹{amountPaid} (Due: ₹{Math.max(0, (Number(orderQty) || 0) * (Number(orderRate) || 0) - Number(amountPaid))})
+                      </span>
+                    ) : (
+                      <span className="text-amber-400 font-medium">No Payment (₹0 Received - Full Due)</span>
+                    )}
+                  </p>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/40">
@@ -1138,6 +1346,7 @@ export default function ShopDetailsClient() {
                     <option value="Moong Sprouts">Moong Sprouts</option>
                     <option value="Chana Sprouts">Chana Sprouts</option>
                     <option value="Mixed Sprouts">Mixed Sprouts</option>
+                    <option value="Horse Gram Sprouts">Horse Gram Sprouts</option>
                   </select>
                 </div>
 
@@ -1235,6 +1444,7 @@ export default function ShopDetailsClient() {
                     <option value="Moong Sprouts">Moong Sprouts</option>
                     <option value="Chana Sprouts">Chana Sprouts</option>
                     <option value="Mixed Sprouts">Mixed Sprouts</option>
+                    <option value="Horse Gram Sprouts">Horse Gram Sprouts</option>
                   </select>
                 </div>
 
@@ -1332,6 +1542,7 @@ export default function ShopDetailsClient() {
                     <option value="Moong Sprouts">Moong Sprouts</option>
                     <option value="Chana Sprouts">Chana Sprouts</option>
                     <option value="Mixed Sprouts">Mixed Sprouts</option>
+                    <option value="Horse Gram Sprouts">Horse Gram Sprouts</option>
                   </select>
                 </div>
 
@@ -1345,7 +1556,11 @@ export default function ShopDetailsClient() {
                       onKeyDown={allowOnlyNumbersKeys}
                       onChange={(e) => {
                         const clean = sanitizeInteger(e.target.value);
-                        setEditOrderQty(clean === '' ? ('' as any) : Number(clean));
+                        const newQty = clean === '' ? ('' as any) : Number(clean);
+                        setEditOrderQty(newQty);
+                        if (editAutoCalcCash) {
+                          setEditAmountPaid((Number(newQty) || 0) * (Number(editOrderRate) || 0));
+                        }
                       }}
                       className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                       required
@@ -1360,7 +1575,11 @@ export default function ShopDetailsClient() {
                       onKeyDown={allowOnlyDecimalKeys}
                       onChange={(e) => {
                         const clean = sanitizeDecimal(e.target.value);
-                        setEditOrderRate(clean === '' ? ('' as any) : Number(clean));
+                        const newRate = clean === '' ? ('' as any) : Number(clean);
+                        setEditOrderRate(newRate);
+                        if (editAutoCalcCash) {
+                          setEditAmountPaid((Number(editOrderQty) || 0) * (Number(newRate) || 0));
+                        }
                       }}
                       className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                       required
@@ -1368,23 +1587,63 @@ export default function ShopDetailsClient() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">
-                    Amount Paid / Cash Collected (₹)
-                  </label>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-semibold text-slate-300">
+                      Amount Paid / Cash Collected (₹)
+                    </label>
+
+                    {/* Switch Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextState = !editAutoCalcCash;
+                        setEditAutoCalcCash(nextState);
+                        if (nextState) {
+                          setEditAmountPaid((Number(editOrderQty) || 0) * (Number(editOrderRate) || 0));
+                        }
+                      }}
+                      className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-750 px-2 py-0.5 rounded-full border border-emerald-900/50 transition-all cursor-pointer"
+                    >
+                      <span className={`text-[9px] font-bold ${editAutoCalcCash ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        {editAutoCalcCash ? 'Auto Full Amount' : 'Manual Entry'}
+                      </span>
+                      <div className={`w-7 h-3.5 flex items-center rounded-full p-0.5 transition-colors ${
+                        editAutoCalcCash ? 'bg-emerald-600' : 'bg-slate-700'
+                      }`}>
+                        <div className={`bg-white w-2.5 h-2.5 rounded-full shadow-md transform transition-transform ${
+                          editAutoCalcCash ? 'translate-x-3.5' : 'translate-x-0'
+                        }`} />
+                      </div>
+                    </button>
+                  </div>
+
                   <input
                     type="text"
                     inputMode="decimal"
                     value={editAmountPaid}
+                    readOnly={editAutoCalcCash}
                     onKeyDown={allowOnlyDecimalKeys}
                     onChange={(e) => {
-                      const clean = sanitizeDecimal(e.target.value);
-                      setEditAmountPaid(clean === '' ? ('' as any) : Number(clean));
+                      if (!editAutoCalcCash) {
+                        const clean = sanitizeDecimal(e.target.value);
+                        setEditAmountPaid(clean === '' ? ('' as any) : Number(clean));
+                      }
                     }}
-                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white font-bold"
+                    placeholder="0"
+                    className={`w-full bg-slate-800 border rounded-xl px-3 py-2 text-white font-bold transition-all ${
+                      editAutoCalcCash
+                        ? 'border-emerald-500/60 bg-emerald-950/20 text-emerald-300'
+                        : 'border-emerald-900/40 focus:border-emerald-500'
+                    }`}
                   />
-                  <p className="text-[9px] text-slate-400 mt-1">
-                    Total Order Value: ₹{(Number(editOrderQty) || 0) * (Number(editOrderRate) || 0)}
+                  <p className="text-[9px] text-slate-400 flex justify-between items-center pt-0.5">
+                    <span>Total Order Value: ₹{(Number(editOrderQty) || 0) * (Number(editOrderRate) || 0)}</span>
+                    {editAutoCalcCash ? (
+                      <span className="text-emerald-400 font-bold">✓ Full payment calculated</span>
+                    ) : (
+                      <span className="text-amber-400 font-medium">(Manual entry)</span>
+                    )}
                   </p>
                 </div>
 
@@ -1403,6 +1662,96 @@ export default function ShopDetailsClient() {
                   >
                     {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                     Update Order
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Edit Payment Settlement */}
+        {editPaymentModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end justify-center p-0">
+            <div className="bg-slate-900 border-t border-emerald-900/60 rounded-t-3xl w-full max-w-md p-5 shadow-2xl space-y-3">
+              <div className="flex justify-between items-center border-b border-emerald-900/40 pb-2">
+                <h3 className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                  <Banknote className="w-4 h-4" /> Edit Payment Settlement
+                </h3>
+                <button onClick={() => setEditPaymentModalOpen(false)} className="text-slate-400">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdatePayment} className="space-y-3 text-xs">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">
+                    Payment Amount Received (₹)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={editPaymentAmount}
+                    onKeyDown={allowOnlyDecimalKeys}
+                    onChange={(e) => {
+                      const clean = sanitizeDecimal(e.target.value);
+                      setEditPaymentAmount(clean === '' ? ('' as any) : Number(clean));
+                    }}
+                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white font-bold"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">Payment Method</label>
+                  <select
+                    value={editPaymentMethod}
+                    onChange={(e: any) => setEditPaymentMethod(e.target.value)}
+                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI / GPay / PhonePe</option>
+                    <option value="bank_transfer">Bank Transfer / NEFT</option>
+                    <option value="cheque">Cheque</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">Transaction Ref / Cheque No.</label>
+                  <input
+                    type="text"
+                    value={editTransactionRef}
+                    onChange={(e) => setEditTransactionRef(e.target.value)}
+                    placeholder="e.g. UPI-987654"
+                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-300 block mb-1">Notes / Description</label>
+                  <input
+                    type="text"
+                    value={editPaymentNotes}
+                    onChange={(e) => setEditPaymentNotes(e.target.value)}
+                    placeholder="Later Paid Settlement"
+                    className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/40">
+                  <button
+                    type="button"
+                    onClick={() => setEditPaymentModalOpen(false)}
+                    className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-xl font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-900/40"
+                  >
+                    {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Save Changes
                   </button>
                 </div>
               </form>
