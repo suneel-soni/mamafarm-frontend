@@ -96,11 +96,11 @@ export default function SalesPerformancePage() {
   const weeklySales = salesData.weeklySales ?? 0;
   const monthlySales = salesData.monthlySales ?? 0;
   const totalSalesAllTime = salesData.totalSalesAllTime ?? salesData.totalRevenue ?? 0;
-  const totalCollectionAllTime = Math.max(0, totalSalesAllTime - pendingCollection);
   const totalDeliveredPackets = salesData.totalDeliveredPackets ?? 0;
   const totalDeliveredAmount = salesData.totalDeliveredAmount ?? 0;
   const totalReplacedPackets = salesData.totalReplacedPackets ?? 0;
   const totalReplacedAmount = salesData.totalReplacedAmount ?? 0;
+  const totalCollectionAllTime = Math.max(0, totalSalesAllTime - pendingCollection - totalReplacedAmount);
   const topShops = salesData.topPerformingShops || [];
 
   return (
@@ -190,7 +190,7 @@ export default function SalesPerformancePage() {
               ₹{totalCollectionAllTime.toLocaleString('en-IN')}
             </p>
             <p className="text-[9px] text-indigo-300/80 mt-0.5 font-semibold">
-              Lifetime Collections
+              Sales - Due - Replaced
             </p>
           </div>
 

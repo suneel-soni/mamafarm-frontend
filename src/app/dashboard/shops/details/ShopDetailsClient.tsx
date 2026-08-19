@@ -184,7 +184,7 @@ export default function ShopDetailsClient() {
     setRecordType('replacement');
     setReturnSproutType('Moong Sprouts');
     setReturnQty(1);
-    setReturnRate(0);
+    setReturnRate(7);
     setReturnReason('Expired Packet Replacement');
     setReturnModalOpen(true);
   };
@@ -198,7 +198,7 @@ export default function ShopDetailsClient() {
     const item = rawReturn.items?.[0] || entry.items?.[0] || {};
     setEditReturnSproutType(item.sproutType || 'Moong Sprouts');
     setEditReturnQty(item.quantity !== undefined ? item.quantity : 1);
-    setEditReturnRate(item.rate !== undefined ? item.rate : 20);
+    setEditReturnRate(item.rate !== undefined && item.rate > 0 ? item.rate : 7);
     setEditReturnReason(rawReturn.reason || entry.reason || 'Expired Packet Replacement');
     setEditReturnModalOpen(true);
   };
@@ -209,6 +209,7 @@ export default function ShopDetailsClient() {
     try {
       const qty = Number(returnQty);
       const rate = Number(returnRate);
+      const totalAmount = qty * rate;
       const payload = {
         shopId,
         type: 'replacement',
@@ -220,10 +221,10 @@ export default function ShopDetailsClient() {
             quantity: qty,
             unit: 'packets',
             rate: rate,
-            amount: 0,
+            amount: totalAmount,
           },
         ],
-        totalRefundAmount: 0,
+        totalRefundAmount: totalAmount,
       };
 
       const res = await returnsAPI.create(payload);
@@ -249,6 +250,7 @@ export default function ShopDetailsClient() {
     try {
       const qty = Number(editReturnQty);
       const rate = Number(editReturnRate);
+      const totalAmount = qty * rate;
       const payload = {
         type: 'replacement',
         isReplacement: true,
@@ -259,10 +261,10 @@ export default function ShopDetailsClient() {
             quantity: qty,
             unit: 'packets',
             rate: rate,
-            amount: 0,
+            amount: totalAmount,
           },
         ],
-        totalRefundAmount: 0,
+        totalRefundAmount: totalAmount,
       };
 
       const res = await returnsAPI.update(editingReturnId, payload);
@@ -601,21 +603,37 @@ export default function ShopDetailsClient() {
     return acc;
   }, 0)) : (details?.summary?.pendingPayment ?? shop?.outstandingBalance ?? 0);
 
+  const returnsList = details?.returns || details?.recentReturns || [];
+  const totalReplacedAmountFromReturns = Array.isArray(returnsList) ? returnsList.reduce((acc: number, r: any) => {
+    const isRep = r.type === 'replacement' || r.isReplacement || r.returnType === 'replacement';
+    if (!isRep) return acc;
+    const repVal = r.items?.reduce((iSum: number, item: any) => {
+      const q = Number(item.quantity || 0);
+      const rt = Number(item.rate || 0);
+      return iSum + Number(item.amount !== undefined && item.amount > 0 ? item.amount : q * rt);
+    }, 0) || Number(r.totalRefundAmount || 0);
+    return acc + repVal;
+  }, 0) : 0;
+
   const rawSummary = details?.summary || {};
+  const totalReplacedAmount = rawSummary.totalReplacedAmount ?? shop.totalReplacedAmount ?? totalReplacedAmountFromReturns;
+  const totalSalesVal = rawSummary.totalDeliveredVal ?? rawSummary.totalDeliveredValue ?? shop.totalDeliveredValue ?? 0;
+  const pendingPaymentVal = computedLedgerDue;
+  const actualCollection = Math.max(0, totalSalesVal - pendingPaymentVal - totalReplacedAmount);
+
   const summary = {
     totalDeliveredQty: rawSummary.totalDeliveredQty ?? shop.totalDeliveredQuantity ?? 0,
     totalReturnedQty: rawSummary.totalReturnedQty ?? shop.totalReturnedQuantity ?? 0,
     totalReplacedQty: rawSummary.totalReplacedQty ?? shop.totalReplacedQuantity ?? 0,
+    totalReplacedAmount,
     currentQuantity: rawSummary.currentQuantity ?? shop.currentQuantity ?? ((shop.totalDeliveredQuantity || 0) - (shop.totalReturnedQuantity || 0)),
-    totalDeliveredValue: rawSummary.totalDeliveredVal ?? rawSummary.totalDeliveredValue ?? shop.totalDeliveredValue ?? 0,
-    totalPaidAmount: rawSummary.totalPaid ?? rawSummary.totalPaidAmount ?? shop.totalPaidAmount ?? 0,
-    pendingPayment: computedLedgerDue,
+    totalDeliveredValue: totalSalesVal,
+    totalPaidAmount: actualCollection,
+    pendingPayment: pendingPaymentVal,
     dueSyncDate: rawSummary.dueSyncDate || '',
   };
 
-  const totalSalesVal = summary.totalDeliveredValue;
   const totalSalesPayment = summary.totalPaidAmount;
-  const pendingPaymentVal = summary.pendingPayment;
 
   // Merge multiple dispatch orders by date for Historical Chart
   const buildDateWiseChartData = () => {
@@ -821,7 +839,9 @@ export default function ShopDetailsClient() {
               <p className="text-[9px] text-cyan-400 uppercase font-semibold">Total Replaced</p>
               <p className="text-sm sm:text-base font-bold text-cyan-300 mt-0.5">{summary.totalReplacedQty || 0} Packets</p>
             </div>
-            <p className="text-[8px] text-cyan-500 font-medium mt-1">1-to-1 Swaps</p>
+            <p className="text-[8px] font-bold text-cyan-400 mt-1 truncate">
+              Value: ₹{totalReplacedAmount.toLocaleString('en-IN')} (1-to-1 Swaps)
+            </p>
           </div>
         </div>
 
@@ -1050,13 +1070,13 @@ export default function ShopDetailsClient() {
                           </div>
                         </div>
 
-                        {/* Action Button: Mark as Paid manually by sender */}
+                        {/* Action Button: Settle delivery payment */}
                         {unpaidDue > 0 ? (
                           <button
                             onClick={() => openPaymentModalForDelivery(entry)}
                             className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 shadow-md shadow-amber-900/30 transition-all active:scale-95 shrink-0"
                           >
-                            <Banknote className="w-3.5 h-3.5 shrink-0" /> Mark as Paid (₹{unpaidDue})
+                            <Banknote className="w-3.5 h-3.5 shrink-0" /> Settle ₹{unpaidDue}
                           </button>
                         ) : (
                           <div className="flex items-center justify-center gap-1 text-emerald-400 font-bold bg-emerald-950/60 px-2 py-1 rounded-md border border-emerald-800/40 text-[10px] shrink-0">
@@ -1070,10 +1090,12 @@ export default function ShopDetailsClient() {
                     {!isDelivery && (
                       <div className="flex justify-between items-center text-[10px] pt-1 border-t border-emerald-900/20">
                         <span className="text-slate-400">
-                          {isReplacement ? 'Financial Impact' : 'Amount Settled'}
+                          {isReplacement ? 'Replaced Value' : 'Amount Settled'}
                         </span>
                         <span className={`font-bold ${isReplacement ? 'text-cyan-300' : 'text-emerald-300'}`}>
-                          {isReplacement ? '₹0 (1-to-1 Packet Exchange)' : `₹${entry.credit}`}
+                          {isReplacement
+                            ? `₹${Number(entry.credit || entry.amount || entry.items?.reduce((s: number, i: any) => s + Number(i.amount || (i.quantity * i.rate) || 0), 0) || 0).toLocaleString('en-IN')}`
+                            : `₹${Number(entry.credit || entry.amount || 0).toLocaleString('en-IN')}`}
                         </span>
                       </div>
                     )}
@@ -1372,6 +1394,7 @@ export default function ShopDetailsClient() {
                         setReturnQty(clean === '' ? ('' as any) : Number(clean));
                       }}
                       className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                      required
                     />
                   </div>
 
@@ -1387,8 +1410,17 @@ export default function ShopDetailsClient() {
                         setReturnRate(clean === '' ? ('' as any) : Number(clean));
                       }}
                       className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
+                      required
                     />
                   </div>
+                </div>
+
+                {/* Total Value calculation preview */}
+                <div className="bg-slate-950/60 border border-cyan-900/40 rounded-xl p-2.5 flex justify-between items-center text-[11px]">
+                  <span className="text-slate-400">Total Replacement Value:</span>
+                  <span className="font-bold text-cyan-400">
+                    ₹{((Number(returnQty) || 0) * (Number(returnRate) || 0)).toLocaleString('en-IN')}
+                  </span>
                 </div>
 
                 <div>
@@ -1400,7 +1432,7 @@ export default function ShopDetailsClient() {
                     className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                   />
                   <p className="text-[9px] text-cyan-400 mt-1">
-                    * Replacements swap expired packets with fresh packets (1-for-1). Outstanding balance remains unchanged.
+                    * Replaced amount (Qty × Rate) will be deducted from shop collection/revenue.
                   </p>
                 </div>
 
@@ -1490,6 +1522,14 @@ export default function ShopDetailsClient() {
                   </div>
                 </div>
 
+                {/* Total Value calculation preview */}
+                <div className="bg-slate-950/60 border border-cyan-900/40 rounded-xl p-2.5 flex justify-between items-center text-[11px]">
+                  <span className="text-slate-400">Total Replacement Value:</span>
+                  <span className="font-bold text-cyan-400">
+                    ₹{((Number(editReturnQty) || 0) * (Number(editReturnRate) || 0)).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
                 <div>
                   <label className="text-[10px] font-semibold text-slate-300 block mb-1">Reason / Notes</label>
                   <input
@@ -1499,7 +1539,7 @@ export default function ShopDetailsClient() {
                     className="w-full bg-slate-800 border border-emerald-900/40 rounded-xl px-3 py-2 text-white"
                   />
                   <p className="text-[9px] text-cyan-400 mt-1">
-                    1-to-1 Packet Exchange: No impact on outstanding payment balance.
+                    * Replaced amount (Qty × Rate) will be deducted from shop collection/revenue.
                   </p>
                 </div>
 

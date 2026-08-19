@@ -217,23 +217,28 @@ export const dashboardAPI = {
       const returns = getStorage<any[]>('returns', []);
       const payments = getStorage<any[]>('payments', []);
       const totalRev = deliveries.reduce((acc, d) => acc + (d.netAmount || 0), 0);
-      const totalCollectionAllTime = payments.reduce((acc, p) => acc + (p.amount || 0), 0);
+      const pendingCollection = deliveries.reduce(
+        (sum, d) => sum + Math.max(0, (d.netAmount || 0) - (d.amountPaid || 0)),
+        0
+      );
       const totalDeliveredPackets = deliveries.reduce((acc, d) => {
         return acc + (d.items?.reduce((iSum: number, item: any) => iSum + Number(item.quantity || 0), 0) || 0);
       }, 0);
       let totalReplacedPackets = 0;
       let totalReplacedAmount = 0;
       returns.forEach((r) => {
-        if (r.type === 'replacement' || r.isReplacement) {
+        const isRep = r.type === 'replacement' || r.isReplacement;
+        if (isRep) {
           r.items?.forEach((i: any) => {
             const q = Number(i.quantity || 0);
             const rRate = Number(i.rate || 0);
-            const amt = Number(i.amount || q * rRate);
+            const amt = Number(i.amount !== undefined && i.amount > 0 ? i.amount : q * rRate);
             totalReplacedPackets += q;
             totalReplacedAmount += amt;
           });
         }
       });
+      const totalCollectionAllTime = Math.max(0, totalRev - pendingCollection - totalReplacedAmount);
       return {
         success: true,
         isFallback: true,
@@ -392,10 +397,17 @@ function recalculateShopLocalStorage(shopId: string) {
   let totalReturnedQty = 0;
   let totalReplacedQty = 0;
   let totalRefunds = 0;
+  let totalReplacedAmount = 0;
   returns.forEach((r) => {
     const isRep = r.type === 'replacement' || r.isReplacement;
     if (isRep) {
-      r.items?.forEach((i: any) => { totalReplacedQty += Number(i.quantity || 0); });
+      r.items?.forEach((i: any) => {
+        const q = Number(i.quantity || 0);
+        const rt = Number(i.rate || 0);
+        const amt = Number(i.amount !== undefined && i.amount > 0 ? i.amount : q * rt);
+        totalReplacedQty += q;
+        totalReplacedAmount += amt;
+      });
     } else {
       totalRefunds += Number(r.totalRefundAmount || 0);
       r.items?.forEach((i: any) => { totalReturnedQty += Number(i.quantity || 0); });
@@ -423,17 +435,18 @@ function recalculateShopLocalStorage(shopId: string) {
   const grossPaid = totalDeliveryPaid + totalStandalonePaid;
 
   const netSalesVal = Math.max(0, grossDeliveredValue - totalRefunds);
-  const netSalesPayment = Math.min(grossPaid, netSalesVal);
-  const outstandingBalance = Math.max(0, netSalesVal - grossPaid);
+  const outstandingBalance = Math.max(0, deliveries.reduce((sum, d) => sum + Math.max(0, (d.netAmount || 0) - (d.amountPaid || 0)), 0) - totalStandalonePaid);
+  const actualCollection = Math.max(0, netSalesVal - outstandingBalance - totalReplacedAmount);
 
   shops[shopIndex] = {
     ...shops[shopIndex],
     totalDeliveredQuantity: totalDeliveredQty,
     totalReturnedQuantity: totalReturnedQty,
     totalReplacedQuantity: totalReplacedQty,
+    totalReplacedAmount: totalReplacedAmount,
     currentQuantity: Math.max(0, totalDeliveredQty - totalReturnedQty),
     totalDeliveredValue: netSalesVal,
-    totalPaidAmount: netSalesPayment,
+    totalPaidAmount: actualCollection,
     outstandingBalance: outstandingBalance,
   };
   setStorage('shops', shops);
@@ -682,13 +695,19 @@ export const returnsAPI = {
       const shop = shops.find((s) => s._id === data.shopId || s.shopCode === data.shopId);
       const qty = data.items?.reduce((acc: number, i: any) => acc + Number(i.quantity || 0), 0) || 0;
       const isRep = data.type === 'replacement' || data.isReplacement === true;
-
-      const refundAmt = isRep ? 0 : Number(data.totalRefundAmount || 0);
+      const normalizedItems = (data.items || []).map((i: any) => {
+        const q = Number(i.quantity || 0);
+        const rt = Number(i.rate || 0);
+        const amt = Number(i.amount !== undefined && i.amount > 0 ? i.amount : q * rt);
+        return { ...i, quantity: q, rate: rt, amount: amt };
+      });
+      const refundAmt = normalizedItems.reduce((s: number, i: any) => s + i.amount, 0);
       const prefix = isRep ? 'REP' : 'RET';
       const newReturn = {
         _id: `${prefix}-${101 + returns.length}`,
         returnNumber: `${prefix}-2026-0${returns.length + 1}`,
         ...data,
+        items: normalizedItems,
         type: isRep ? 'replacement' : 'return',
         isReplacement: isRep,
         totalRefundAmount: refundAmt,
@@ -720,17 +739,20 @@ export const returnsAPI = {
       if (index !== -1) {
         const isRep = data.type === 'replacement' || data.isReplacement === true;
         const rawItems = data.items || returns[index].items || [];
-        const normalizedItems = rawItems.map((item: any) => ({
-          ...item,
-          amount: isRep ? 0 : (item.amount || 0),
-        }));
+        const normalizedItems = rawItems.map((item: any) => {
+          const q = Number(item.quantity || 0);
+          const rt = Number(item.rate || 0);
+          const amt = Number(item.amount !== undefined && item.amount > 0 ? item.amount : q * rt);
+          return { ...item, quantity: q, rate: rt, amount: amt };
+        });
+        const refundAmt = normalizedItems.reduce((s: number, i: any) => s + i.amount, 0);
         returns[index] = {
           ...returns[index],
           ...data,
           isReplacement: isRep,
           type: isRep ? 'replacement' : 'return',
           items: normalizedItems,
-          totalRefundAmount: isRep ? 0 : (data.totalRefundAmount || 0),
+          totalRefundAmount: refundAmt,
         };
         setStorage('returns', returns);
         if (returns[index]?.shopId || returns[index]?.shop) {

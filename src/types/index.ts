@@ -82,6 +82,8 @@ export interface Shop {
   image?: string;
   totalDeliveredQuantity: number;
   totalReturnedQuantity: number;
+  totalReplacedQuantity?: number;
+  totalReplacedAmount?: number;
   currentQuantity: number; // Delivered - Returned
   outstandingBalance: number; // Total Amount - Total Received
   totalDeliveredValue: number;
@@ -121,6 +123,8 @@ export interface Delivery {
 export interface ReturnOrder {
   _id: string;
   returnNumber: string;
+  type?: 'return' | 'replacement';
+  isReplacement?: boolean;
   shop: string | Shop;
   shopName: string;
   deliveryId?: string;
@@ -185,6 +189,7 @@ export interface ShopDetailsData {
     totalDeliveredQty: number;
     totalReturnedQty: number;
     totalReplacedQty?: number;
+    totalReplacedAmount?: number;
     currentQuantity: number;
     totalDeliveredValue?: number;
     totalDeliveredVal?: number;
