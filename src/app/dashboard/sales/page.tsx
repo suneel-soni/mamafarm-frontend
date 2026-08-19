@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { dashboardAPI } from '@/services/api';
@@ -24,6 +24,7 @@ export default function SalesPerformancePage() {
   const router = useRouter();
   const [salesData, setSalesData] = useState<SalesPerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [timeframe, setTimeframe] = useState<'daily' | 'weekly'>('daily');
 
   const { showError, showWarning } = useToast();
 
@@ -46,6 +47,41 @@ export default function SalesPerformancePage() {
     }
     loadSales();
   }, []);
+
+  const activeChartData = useMemo(() => {
+    if (!salesData) return [];
+    if (timeframe === 'weekly') {
+      if (salesData.weeklyGraph && salesData.weeklyGraph.length > 0) {
+        return salesData.weeklyGraph.map((item) => ({
+          label: item.week,
+          sales: item.sales,
+          deliveries: item.deliveries,
+        }));
+      }
+      // Fallback: Group dailyGraph into 7-day windows if weeklyGraph is empty
+      const daily = salesData.dailyGraph || [];
+      const weeks: { label: string; sales: number; deliveries?: number }[] = [];
+      const chunkSize = 7;
+      for (let i = 0; i < daily.length; i += chunkSize) {
+        const chunk = daily.slice(i, i + chunkSize);
+        const totalSales = chunk.reduce((sum, d) => sum + (d.sales || 0), 0);
+        const totalDeliv = chunk.reduce((sum, d) => sum + (d.deliveries || 0), 0);
+        const start = chunk[0]?.date || '';
+        const end = chunk[chunk.length - 1]?.date || '';
+        weeks.push({
+          label: start === end ? start : `${start} - ${end}`,
+          sales: totalSales,
+          deliveries: totalDeliv,
+        });
+      }
+      return weeks;
+    }
+    return (salesData.dailyGraph || []).map((item) => ({
+      label: item.date,
+      sales: item.sales,
+      deliveries: item.deliveries,
+    }));
+  }, [timeframe, salesData]);
 
   if (loading || !salesData) {
     return (
@@ -185,18 +221,51 @@ export default function SalesPerformancePage() {
           </div>
         </div>
 
-        {/* Daily Sales Trajectory Chart */}
+        {/* Daily / Weekly Sales Trajectory Chart */}
         <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3.5 shadow-md space-y-2">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
-              <BarChart3 className="w-4 h-4 text-emerald-400" /> Daily Sales Trajectory
-            </h3>
-            <span className="text-[9px] text-slate-400">14 Days</span>
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 justify-between w-full">
+              <div className="flex items-center gap-1.5">
+                <BarChart3 className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-bold text-white text-xs">
+                  {timeframe === 'daily' ? 'Daily Sales Trajectory' : 'Weekly Sales Trajectory'}
+                </h3>
+              </div>
+              <span className="text-[9px] text-slate-400">
+                {timeframe === 'daily' ? '14 Days' : '8 Weeks'}
+              </span>
+            </div>
+
+            {/* Daily / Weekly Switch Button */}
+            <div className="flex items-center bg-slate-950 p-0.5 rounded-xl border border-emerald-900/40 text-[10px]">
+              <button
+                type="button"
+                onClick={() => setTimeframe('daily')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                  timeframe === 'daily'
+                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/40'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Daily
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimeframe('weekly')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                  timeframe === 'weekly'
+                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/40'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Weekly
+              </button>
+            </div>
           </div>
 
           <div className="h-52 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={salesData.dailyGraph || []} margin={{ top: 18, right: 10, left: -15, bottom: 0 }}>
+              <AreaChart data={activeChartData} margin={{ top: 18, right: 10, left: -15, bottom: 0 }}>
                 <defs>
                   <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -204,11 +273,11 @@ export default function SalesPerformancePage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" stroke="#64748b" fontSize={9} />
+                <XAxis dataKey="label" stroke="#64748b" fontSize={9} />
                 <YAxis stroke="#64748b" fontSize={9} tickFormatter={(v) => `₹${v}`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#059669', borderRadius: '10px', fontSize: '10px' }}
-                  formatter={(v: any) => [`₹${v}`, 'Sales']}
+                  formatter={(v: any) => [`₹${Number(v).toLocaleString('en-IN')}`, 'Sales']}
                 />
                 <Area
                   type="monotone"
@@ -227,7 +296,7 @@ export default function SalesPerformancePage() {
                     fill="#34d399"
                     fontSize={8}
                     fontWeight="bold"
-                    formatter={(v: any) => (v ? `₹${Number(v).toLocaleString('en-IN')}` : '')}
+                    formatter={(v: any) => (v ? `₹${Number(v) >= 10000 ? `${(Number(v) / 1000).toFixed(1)}k` : Number(v).toLocaleString('en-IN')}` : '')}
                   />
                 </Area>
               </AreaChart>

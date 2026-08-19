@@ -252,6 +252,7 @@ export const dashboardAPI = {
           totalReplacedAmount,
           topPerformingShops: shops.slice(0, 3),
           dailyGraph: [],
+          weeklyGraph: [],
           monthlyGraph: [],
         },
       };

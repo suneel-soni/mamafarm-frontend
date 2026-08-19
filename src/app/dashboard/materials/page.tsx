@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { materialsAPI, suppliersAPI } from '@/services/api';
 import { MaterialGroupedSummary, Supplier } from '@/types';
-import { Wheat, Plus, Calendar, Filter, X, Check, Edit2, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Wheat, Package, Layers, DollarSign, Plus, Calendar, Filter, X, Check, Edit2, Trash2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyNumbersKeys, allowOnlyDecimalKeys } from '@/utils/inputValidation';
 import { useForm } from 'react-hook-form';
@@ -97,6 +97,105 @@ export default function MaterialSummaryPage() {
     }
     loadSuppliers();
   }, []);
+
+  // Compute Raw Bean & Packaging Purchase Tracking Stats
+  const { rawBeanStats, packagingStats, cleaningOtherStats, totalCost, totalOrders } = useMemo(() => {
+    let rbCost = 0;
+    let rbQty = 0;
+    let rbCount = 0;
+
+    let pkgCost = 0;
+    let pkgQty = 0;
+    let pkgCount = 0;
+
+    let otherCost = 0;
+    let otherCount = 0;
+
+    let totCost = 0;
+    let totOrders = 0;
+
+    if (summaryData?.groupedSummary && Array.isArray(summaryData.groupedSummary)) {
+      summaryData.groupedSummary.forEach((group: any) => {
+        (group.materials || []).forEach((mat: any) => {
+          const qty = Number(mat.quantity || 0);
+          const price = Number(mat.purchasePrice || 0);
+          const itemTotal = price * qty;
+          const cat = (mat.category || '').toLowerCase();
+
+          totCost += itemTotal;
+          totOrders += 1;
+
+          if (cat.includes('raw') || cat.includes('bean') || cat.includes('grain')) {
+            rbCost += itemTotal;
+            rbQty += qty;
+            rbCount += 1;
+          } else if (cat.includes('pack') || cat.includes('pouch') || cat.includes('box') || cat.includes('sticker')) {
+            pkgCost += itemTotal;
+            pkgQty += qty;
+            pkgCount += 1;
+          } else {
+            otherCost += itemTotal;
+            otherCount += 1;
+          }
+        });
+      });
+    } else if (summaryData?.materials && Array.isArray(summaryData.materials)) {
+      summaryData.materials.forEach((mat: any) => {
+        const qty = Number(mat.quantity || 0);
+        const price = Number(mat.purchasePrice || 0);
+        const itemTotal = price * qty;
+        const cat = (mat.category || '').toLowerCase();
+
+        totCost += itemTotal;
+        totOrders += 1;
+
+        if (cat.includes('raw') || cat.includes('bean') || cat.includes('grain')) {
+          rbCost += itemTotal;
+          rbQty += qty;
+          rbCount += 1;
+        } else if (cat.includes('pack') || cat.includes('pouch') || cat.includes('box') || cat.includes('sticker')) {
+          pkgCost += itemTotal;
+          pkgQty += qty;
+          pkgCount += 1;
+        } else {
+          otherCost += itemTotal;
+          otherCount += 1;
+        }
+      });
+    } else {
+      totCost = summaryData?.totalPurchaseCost ?? 0;
+      totOrders = summaryData?.numberOfPurchases ?? 0;
+      if (summaryData?.rawBeanStats) {
+        rbCost = summaryData.rawBeanStats.totalCost || 0;
+        rbQty = summaryData.rawBeanStats.totalQuantity || 0;
+        rbCount = summaryData.rawBeanStats.count || 0;
+      }
+      if (summaryData?.packagingStats) {
+        pkgCost = summaryData.packagingStats.totalCost || 0;
+        pkgQty = summaryData.packagingStats.totalQuantity || 0;
+        pkgCount = summaryData.packagingStats.count || 0;
+      }
+    }
+
+    return {
+      rawBeanStats: {
+        totalCost: rbCost,
+        totalQuantity: rbQty,
+        count: rbCount,
+      },
+      packagingStats: {
+        totalCost: pkgCost,
+        totalQuantity: pkgQty,
+        count: pkgCount,
+      },
+      cleaningOtherStats: {
+        totalCost: otherCost,
+        count: otherCount,
+      },
+      totalCost: totCost || summaryData?.totalPurchaseCost || 0,
+      totalOrders: totOrders || summaryData?.numberOfPurchases || 0,
+    };
+  }, [summaryData]);
 
   const openAddModal = () => {
     setEditingMaterial(null);
@@ -196,7 +295,7 @@ export default function MaterialSummaryPage() {
               <Wheat className="w-5 h-5 text-emerald-400" />
               Material Purchases
             </h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Raw grain & pouch summary</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Raw grain & pouch purchase tracking</p>
           </div>
           <button
             onClick={openAddModal}
@@ -229,18 +328,84 @@ export default function MaterialSummaryPage() {
           ))}
         </div>
 
-        {/* Top Summary Metrics Cards */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md">
-            <p className="text-[9px] text-slate-400 uppercase font-semibold">Total Cost</p>
-            <p className="text-base font-bold text-emerald-400 mt-0.5">
-              ₹{(summaryData?.totalPurchaseCost || 0).toLocaleString('en-IN')}
+        {/* Top Summary Metrics Cards - Raw Bean & Packaging Track Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {/* 1. Raw Bean Purchases Track */}
+          <div className="bg-slate-900/90 border border-amber-900/40 rounded-2xl p-3 shadow-md relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Raw Bean</span>
+              <div className="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                <Wheat className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+            </div>
+            <p className="text-base sm:text-lg font-extrabold text-amber-400 mt-1">
+              ₹{rawBeanStats.totalCost.toLocaleString('en-IN')}
             </p>
+            <div className="flex items-center justify-between text-[9px] text-amber-300/80 mt-1 font-bold">
+              <span>{rawBeanStats.totalQuantity.toLocaleString('en-IN')} kg total</span>
+              <span className="bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-800/40">
+                {rawBeanStats.count} {rawBeanStats.count === 1 ? 'batch' : 'batches'}
+              </span>
+            </div>
           </div>
 
-          <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md">
-            <p className="text-[9px] text-slate-400 uppercase font-semibold">Total Purchases</p>
-            <p className="text-base font-bold text-white mt-0.5">{summaryData?.numberOfPurchases || 0} Orders</p>
+          {/* 2. Packaging Purchases Track */}
+          <div className="bg-slate-900/90 border border-teal-900/40 rounded-2xl p-3 shadow-md relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Packaging</span>
+              <div className="w-6 h-6 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
+                <Package className="w-3.5 h-3.5 text-teal-400" />
+              </div>
+            </div>
+            <p className="text-base sm:text-lg font-extrabold text-teal-400 mt-1">
+              ₹{packagingStats.totalCost.toLocaleString('en-IN')}
+            </p>
+            <div className="flex items-center justify-between text-[9px] text-teal-300/80 mt-1 font-bold">
+              <span>{packagingStats.totalQuantity.toLocaleString('en-IN')} units</span>
+              <span className="bg-teal-950/80 px-1.5 py-0.5 rounded border border-teal-800/40">
+                {packagingStats.count} {packagingStats.count === 1 ? 'order' : 'orders'}
+              </span>
+            </div>
+          </div>
+
+          {/* 3. Total Material Cost */}
+          <div className="bg-slate-900/90 border border-emerald-900/40 rounded-2xl p-3 shadow-md relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Spend</span>
+              <div className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+            </div>
+            <p className="text-base sm:text-lg font-extrabold text-emerald-400 mt-1">
+              ₹{totalCost.toLocaleString('en-IN')}
+            </p>
+            <div className="flex items-center justify-between text-[9px] text-emerald-300/80 mt-1 font-bold">
+              <span>All Categories</span>
+              <span className="bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/40">
+                {totalOrders} {totalOrders === 1 ? 'Purchase' : 'Purchases'}
+              </span>
+            </div>
+          </div>
+
+          {/* 4. Total Orders & Average Spend */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-md relative overflow-hidden">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Orders</span>
+              <div className="w-6 h-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                <Layers className="w-3.5 h-3.5 text-indigo-400" />
+              </div>
+            </div>
+            <p className="text-base sm:text-lg font-extrabold text-white mt-1">
+              {totalOrders} <span className="text-xs font-semibold text-slate-400">Total</span>
+            </p>
+            <div className="flex items-center justify-between text-[9px] text-slate-400 mt-1 font-semibold">
+              <span>
+                {cleaningOtherStats.count > 0 ? `Other: ₹${cleaningOtherStats.totalCost.toLocaleString('en-IN')}` : 'Filtered Period'}
+              </span>
+              <span className="bg-slate-800 px-1.5 py-0.5 rounded text-indigo-300 font-bold">
+                {totalOrders > 0 ? `₹${Math.round(totalCost / totalOrders).toLocaleString('en-IN')}/avg` : '₹0'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -284,49 +449,68 @@ export default function MaterialSummaryPage() {
 
                   {isExpanded && (
                     <div className="space-y-2 pt-1">
-                      {group.materials.map((mat: any) => (
-                        <div key={mat._id} className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2.5 text-xs space-y-1.5">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <p className="font-bold text-white text-xs">{mat.name}</p>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openEditModal(mat);
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-700/80 rounded-lg transition-all"
-                                  title="Edit Material Purchase"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteMaterial(mat._id, mat.name);
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-700/80 rounded-lg transition-all"
-                                  title="Delete Material Purchase"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
+                      {group.materials.map((mat: any) => {
+                        const catLower = (mat.category || '').toLowerCase();
+                        const isRawBean = catLower.includes('raw') || catLower.includes('bean') || catLower.includes('grain');
+                        const isPackaging = catLower.includes('pack') || catLower.includes('pouch') || catLower.includes('box') || catLower.includes('sticker');
+
+                        return (
+                          <div key={mat._id} className="bg-slate-800/60 border border-emerald-900/30 rounded-xl p-2.5 text-xs space-y-1.5">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-bold text-white text-xs">{mat.name}</p>
+                                  {isRawBean ? (
+                                    <span className="px-1.5 py-0.5 bg-amber-950/80 text-amber-300 border border-amber-800/40 rounded text-[9px] font-bold">
+                                      Raw Bean
+                                    </span>
+                                  ) : isPackaging ? (
+                                    <span className="px-1.5 py-0.5 bg-teal-950/80 text-teal-300 border border-teal-800/40 rounded text-[9px] font-bold">
+                                      Packaging
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded text-[9px] font-medium">
+                                      {mat.category || 'Other'}
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEditModal(mat);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-700/80 rounded-lg transition-all"
+                                    title="Edit Material Purchase"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteMaterial(mat._id, mat.name);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-700/80 rounded-lg transition-all"
+                                    title="Delete Material Purchase"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                  Supplier: {typeof mat.supplier === 'object' ? mat.supplier?.name : 'Local Trade'}
+                                </p>
                               </div>
-                              <p className="text-[10px] text-slate-400">
-                                Supplier: {typeof mat.supplier === 'object' ? mat.supplier?.name : 'Local Trade'}
-                              </p>
+                              <span className="px-2 py-0.5 bg-slate-900 text-emerald-300 rounded-md font-bold text-[10px] shrink-0">
+                                {mat.quantity} {mat.unit}
+                              </span>
                             </div>
-                            <span className="px-2 py-0.5 bg-slate-900 text-emerald-300 rounded-md font-bold text-[10px]">
-                              {mat.quantity} {mat.unit}
-                            </span>
+                            <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1.5 border-t border-emerald-900/20">
+                              <span>Rate: ₹{mat.purchasePrice}/{mat.unit}</span>
+                              <span className="font-bold text-emerald-400">
+                                Total: ₹{Math.round(mat.quantity * mat.purchasePrice).toLocaleString('en-IN')}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1.5 border-t border-emerald-900/20">
-                            <span>Rate: ₹{mat.purchasePrice}/{mat.unit}</span>
-                            <span className="font-bold text-emerald-400">
-                              Total: ₹{Math.round(mat.quantity * mat.purchasePrice).toLocaleString('en-IN')}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

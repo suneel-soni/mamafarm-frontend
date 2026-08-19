@@ -43,6 +43,33 @@ export interface MaterialGroupedSummary {
   count: number;
 }
 
+export interface CategoryPurchaseStat {
+  category: string;
+  totalCost: number;
+  itemsCount: number;
+  totalQuantity?: number;
+}
+
+export interface MaterialSummaryData {
+  totalPurchaseCost: number;
+  numberOfPurchases: number;
+  rawBeanStats?: {
+    totalCost: number;
+    totalQuantity: number;
+    count: number;
+    primaryUnit?: string;
+  };
+  packagingStats?: {
+    totalCost: number;
+    totalQuantity: number;
+    count: number;
+    primaryUnit?: string;
+  };
+  categoryBreakdown?: CategoryPurchaseStat[];
+  groupedSummary: MaterialGroupedSummary[];
+  materials?: Material[];
+}
+
 export interface Shop {
   _id: string;
   shopCode?: string;
@@ -148,6 +175,7 @@ export interface SalesPerformanceData {
     image?: string;
   }[];
   dailyGraph: { date: string; sales: number; deliveries?: number }[];
+  weeklyGraph?: { week: string; sales: number; deliveries?: number }[];
   monthlyGraph: { month: string; sales: number; collections: number }[];
 }
 
@@ -230,11 +258,38 @@ export interface ProductionBatch {
 export interface InventoryItem {
   _id: string;
   itemName: string;
-  type: 'raw_material' | 'finished_sprouts' | 'packaging';
+  type: 'raw_material' | 'finished_sprout' | 'finished_sprouts' | 'packaging' | 'other';
   quantity: number;
   unit: string;
   minThreshold: number;
   valuationPerUnit: number;
+  location?: string;
+  updatedAt?: string;
+}
+
+export interface ItemProcurementSummary {
+  itemName: string;
+  category: string;
+  unit: string;
+  totalQuantity: number;
+  totalSpent: number;
+  avgPrice: number;
+  purchaseCount: number;
+  lastPurchasedDate: string;
+}
+
+export interface InventoryResponseData {
+  items: InventoryItem[];
+  purchasedMaterials?: Material[];
+  procurementStats?: {
+    totalProcuredCost: number;
+    totalPurchasesCount: number;
+    rawBeanCost: number;
+    rawBeanQuantity: number;
+    packagingCost: number;
+    packagingQuantity: number;
+    itemWiseSummary: ItemProcurementSummary[];
+  };
 }
 
 export interface Expense {

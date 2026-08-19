@@ -18,6 +18,7 @@ import {
   Banknote,
   Pencil,
   Trash2,
+  Calendar,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { allowOnlyNumbersKeys, allowOnlyDecimalKeys, sanitizeInteger, sanitizeDecimal } from '@/utils/inputValidation';
@@ -573,7 +574,7 @@ export default function ShopDetailsClient() {
   }
 
   const ledger = details?.ledger || (details?.deliveryHistory ? details.deliveryHistory.map((d: any) => ({
-    date: formatDateTimeIST(d.deliveryDate || d.createdAt),
+    date: formatDateIST(d.deliveryDate || d.createdAt),
     type: 'delivery',
     reference: d.deliveryNumber || 'DEL-2026',
     description: `Dispatched ${d.items?.map((i: any) => `${i.quantity} ${i.sproutType}`).join(', ') || 'Sprouts'}`,
@@ -924,12 +925,13 @@ export default function ShopDetailsClient() {
                 const isPaid = isDelivery ? unpaidDue <= 0 || entry.paymentStatus === 'paid' : true;
 
                 return (
-                  <div key={idx} className="bg-slate-800/70 border border-emerald-900/40 rounded-xl p-3 text-xs space-y-2 shadow-sm">
-                    {/* Header: Reference + Date */}
-                    <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-emerald-900/20 pb-1.5">
-                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        <span className="font-bold text-white text-[11px] font-mono truncate shrink-0">{entry.reference}</span>
-                        <span className="text-[10px] text-slate-400 truncate">({entry.date})</span>
+                  <div key={idx} className="bg-slate-800/70 border border-emerald-900/40 rounded-xl p-3 text-xs space-y-2.5 shadow-sm">
+                    {/* Header: Reference + Status Badge + Actions */}
+                    <div className="flex items-center justify-between gap-1.5 border-b border-emerald-900/20 pb-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-bold text-white text-[11px] font-mono bg-slate-900/90 px-2 py-0.5 rounded border border-emerald-900/40">
+                          {entry.reference}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                         <span
@@ -1018,9 +1020,14 @@ export default function ShopDetailsClient() {
                       </div>
                     </div>
 
-                    {/* Order Details */}
-                    <div className="text-[11px] text-slate-200 font-medium break-words">
-                      {entry.description}
+                    {/* Order Details & Light Date on Right */}
+                    <div className="flex items-start justify-between gap-2 text-[11px] bg-slate-900/60 p-2 rounded-lg border border-emerald-900/20">
+                      <span className="text-slate-200 font-medium break-words flex-1 leading-snug truncate">
+                        {entry.description}
+                      </span>
+                      <span className="text-[10px] text-slate-400/80 font-normal shrink-0 whitespace-nowrap text-right pt-0.5">
+                        {typeof entry.date === 'string' ? entry.date.split(',')[0].trim() : formatDateIST(entry.date)}
+                      </span>
                     </div>
 
                     {/* Unified Delivery & Payment Info in Same Card */}
