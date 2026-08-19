@@ -183,7 +183,7 @@ export default function SalesPerformancePage() {
 
           <div className="bg-slate-900/90 border border-indigo-900/50 rounded-2xl p-3 shadow-md">
             <p className="text-[10px] text-slate-400 font-semibold flex items-center justify-between">
-              <span>Total Collection</span>
+              <span>Net Revenue</span>
               <Wallet className="w-3.5 h-3.5 text-indigo-400" />
             </p>
             <p className="text-base font-extrabold text-indigo-400 mt-0.5">
@@ -216,7 +216,7 @@ export default function SalesPerformancePage() {
               {totalReplacedPackets.toLocaleString('en-IN')} <span className="text-xs font-semibold text-purple-300/80">Pkts</span>
             </p>
             <p className="text-[9px] text-purple-300/80 mt-0.5 font-semibold truncate">
-              Value: ₹{totalReplacedAmount.toLocaleString('en-IN')}
+              Loss: ₹{totalReplacedAmount.toLocaleString('en-IN')}
             </p>
           </div>
         </div>

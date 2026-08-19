@@ -805,7 +805,7 @@ export default function ShopDetailsClient() {
               <p className="text-sm sm:text-base font-bold text-white mt-0.5">₹{totalSalesVal.toLocaleString('en-IN')}</p>
             </div>
             <p className="text-[8px] font-bold text-emerald-400 mt-1 truncate">
-              Collection: ₹{totalSalesPayment.toLocaleString('en-IN')}
+              Net Revenue: ₹{totalSalesPayment.toLocaleString('en-IN')}
             </p>
           </div>
 
@@ -840,7 +840,7 @@ export default function ShopDetailsClient() {
               <p className="text-sm sm:text-base font-bold text-cyan-300 mt-0.5">{summary.totalReplacedQty || 0} Packets</p>
             </div>
             <p className="text-[8px] font-bold text-cyan-400 mt-1 truncate">
-              Value: ₹{totalReplacedAmount.toLocaleString('en-IN')} (1-to-1 Swaps)
+              Loss: ₹{totalReplacedAmount.toLocaleString('en-IN')} (1-to-1 Swaps)
             </p>
           </div>
         </div>
